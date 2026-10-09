@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build-host
+      - name: Build
+        run: cmake --build build-host -j
+      - name: Test
+        run: ctest --test-dir build-host --output-on-failure
+
+  firmware:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GNU Arm toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+      - name: Configure
+        run: cmake -S . -B build-fw -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build-fw -j
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: |
+            build-fw/firmware.elf
+            build-fw/firmware.hex
+            build-fw/firmware.bin
+            build-fw/firmware.map
