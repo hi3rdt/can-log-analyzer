@@ -56,19 +56,20 @@ No vehicle is required: bring-up uses bxCAN loopback mode plus log replay.
 
 ```
 bsw/include/           Std_Types.h, Platform_Types.h, ComStack_Types.h, Can_GeneralTypes.h, SchM.h
-bsw/mcal/can/          Can driver interface (bxCAN implementation in milestone 3)
+bsw/mcal/can/          Can driver interface + Can_Hw pure register-value helpers (exercise 1)
 bsw/ecual/canif/       CAN Interface: software filter, DLC check, ID <-> PDU mapping
 bsw/services/pdur/     PDU Router: Com/CanIf routing, PDU gateway
 bsw/services/com/      COM: signal pack/unpack (Intel/Motorola, signed), I-PDU send
 bsw/services/det/      Default Error Tracer
 config/                Bus DBC and gateway routes (input of the generator)
 gen/                   Generated CanIf/PduR/Com configuration (do not edit)
-tools/                 dbc2c.py generator, cantools test-vector generator, generator tests
+tools/                 dbc2c.py generator, cantools test-vector generator, demo log generator, tests
 platform/stm32f103/    Startup code, linker script, register map, clock/SysTick setup
 app/                   main.c (init sequence, main loop)
 cmake/                 arm-none-eabi toolchain file
 test/host/             Host unit tests (plain C, run with CTest)
-docs/                  Learning roadmap (EN: roadmap.md, VI: roadmap.vi.md)
+samples/               30 s demo drive log (GVRET CSV + candump) generated from config/gateway.dbc
+docs/                  Roadmap, SavvyCAN hands-on guide, guided exercises (docs/exercises/)
 ```
 
 Planned modules (bxCAN driver, `cdd/uartgw`, Os scheduler) are listed in [docs/roadmap.md](docs/roadmap.md#2-cv-project).
