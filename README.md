@@ -6,7 +6,41 @@ An AUTOSAR Classic–inspired **BSW CAN communication stack** for the STM32F103C
 
 Only the Basic Software (BSW) communication path is implemented: `Can` → `CanIf` → `PduR` → `Com`, plus `Det`. RTE and application SWCs are intentionally out of scope, because in production they come from configuration tools (DaVinci, EB tresos, ISOLAR). The ECU acts as a **CAN gateway**: PDU routing in PduR and signal routing in Com, with deadline monitoring and periodic transmission. The public Com API (`Com_ReceiveSignal` / `Com_SendSignal`) is the upper boundary.
 
-Configuration tables (`*_Cfg.c`) are generated from DBC files by a small Python tool (`tools/dbc2c.py`, coming in the next milestone), mirroring what a configuration tool does.
+Configuration tables (`*_Cfg.c`) are generated from DBC files by a small Python tool (`tools/dbc2c.py`), mirroring what a configuration tool does.
+
+## Data flow
+
+```
+ CAN frame --> Can (ISR) --> CanIf_RxIndication --> PduR_CanIfRxIndication --+--> Com_RxIndication (copy bytes)
+                             software filter,       routing table, 1:n       |       |
+                             DLC check                                       |       v
+                                                                             |   Com_ReceiveSignal (task: unpack, sign-extend)
+                                                                             |
+                                                                             +--> CanIf_Transmit (PDU gateway, new CAN ID)
+
+ Com_SendSignal (pack) --> Com_TriggerIPDUSend --> PduR_ComTransmit --> CanIf_Transmit --> Can_Write
+```
+
+## Configuration from DBC
+
+`config/gateway.dbc` describes the bus, `config/routes.json` names the ECU node and the PDU gateway routes:
+
+```sh
+python3 tools/dbc2c.py --dbc config/gateway.dbc --routes config/routes.json --out gen
+```
+
+For node `GW` this creates:
+
+- Com RX I-PDUs for every message that has a signal received by `GW`, and Com TX I-PDUs for every message `GW` transmits.
+- CanIf RX entries sorted by CAN ID (binary search), with a DLC check, plus CanIf TX entries.
+- PduR routes. A PDU gateway target is a pure CanIf L-PDU, not a Com I-PDU.
+- Symbolic handles such as `ComConf_ComSignal_EngineRpm` and `ComConf_ComIPdu_GW_VehicleState`.
+
+The generator rejects overlapping signals, signals outside the DLC, multiplexed signals, CAN FD and signals wider than 32 bits. The generated files in `gen/` are committed so they can be reviewed, and CI fails if they are out of date.
+
+## Verification against cantools
+
+`tools/gen_test_vectors.py` uses [cantools](https://github.com/cantools/cantools) as an independent DBC implementation. It decodes random frames and encodes random signal values, and `test/host/test_comstack.c` checks that the C stack produces the same raw values and bytes for every signal. That covers Intel and Motorola byte order, signed and unsigned signals, and standard and extended IDs.
 
 ## Hardware
 
@@ -21,8 +55,15 @@ No vehicle is required: bring-up uses bxCAN loopback mode plus log replay.
 ## Repository layout
 
 ```
-bsw/include/           Std_Types.h, Platform_Types.h, ComStack_Types.h
+bsw/include/           Std_Types.h, Platform_Types.h, ComStack_Types.h, Can_GeneralTypes.h, SchM.h
+bsw/mcal/can/          Can driver interface (bxCAN implementation in milestone 3)
+bsw/ecual/canif/       CAN Interface: software filter, DLC check, ID <-> PDU mapping
+bsw/services/pdur/     PDU Router: Com/CanIf routing, PDU gateway
+bsw/services/com/      COM: signal pack/unpack (Intel/Motorola, signed), I-PDU send
 bsw/services/det/      Default Error Tracer
+config/                Bus DBC and gateway routes (input of the generator)
+gen/                   Generated CanIf/PduR/Com configuration (do not edit)
+tools/                 dbc2c.py generator, cantools test-vector generator, generator tests
 platform/stm32f103/    Startup code, linker script, register map, clock/SysTick setup
 app/                   main.c (init sequence, main loop)
 cmake/                 arm-none-eabi toolchain file
@@ -30,13 +71,15 @@ test/host/             Host unit tests (plain C, run with CTest)
 docs/                  Learning roadmap (EN: roadmap.md, VI: roadmap.vi.md)
 ```
 
-Planned modules (`bsw/mcal/can`, `bsw/ecual/canif`, `bsw/services/pdur`, `bsw/services/com`, `cdd/uartgw`, `tools/`) are listed in [docs/roadmap.md](docs/roadmap.md#2-cv-project).
+Planned modules (bxCAN driver, `cdd/uartgw`, Os scheduler) are listed in [docs/roadmap.md](docs/roadmap.md#2-cv-project).
 
 ## Build
 
-Host unit tests (gcc, AddressSanitizer + UBSan):
+Host unit tests (gcc, AddressSanitizer + UBSan) and generator tests:
 
 ```sh
+pip install -r tools/requirements.txt
+python3 -m unittest discover -s tools
 cmake -S . -B build-host
 cmake --build build-host
 ctest --test-dir build-host --output-on-failure
@@ -62,7 +105,7 @@ The current firmware brings up the 72 MHz clock tree and blinks the PC13 LED at 
 ## Status
 
 - [x] Milestone 1: repo skeleton, toolchain, startup code, Det, host test setup, CI
-- [ ] Milestone 2: CanIf → PduR → Com with `dbc2c.py` configuration generator
+- [x] Milestone 2: CanIf → PduR → Com with `dbc2c.py` configuration generator
 - [ ] Milestone 3: bxCAN driver (loopback) + UART frame gateway
 - [ ] Milestone 4: Os scheduler, periodic TX, deadline monitoring, signal gateway, log replay
 - [ ] Milestone 5: bus-off recovery, MISRA report, demo

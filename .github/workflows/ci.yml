@@ -10,6 +10,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python tools
+        run: pip install -r tools/requirements.txt
+      - name: Generator unit tests
+        run: python -m unittest discover -s tools -v
+      - name: Generated code is up to date
+        run: |
+          python tools/dbc2c.py --dbc config/gateway.dbc --routes config/routes.json --out gen
+          python tools/gen_test_vectors.py --dbc config/gateway.dbc --routes config/routes.json --out test/host/test_vectors.h
+          git diff --exit-code -- gen test/host/test_vectors.h
       - name: Configure
         run: cmake -S . -B build-host
       - name: Build
