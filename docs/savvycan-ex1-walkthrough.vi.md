@@ -60,7 +60,7 @@ byte0 byte1 byte2 byte3
 - byte0 = `0x40` **không bao giờ đổi** trong cả log: hằng số, có thể là trạng thái hoặc bit cấu hình.
 - byte1 chỉ có 3 giá trị (`0xC0`…`0xC8`): một trạng thái ít khi đổi.
 - **Nibble cao của byte2 tăng 3, 4, 5 … F, 0, 1 …**: đây là **alive counter** (rolling counter) 4 bit. ECU nhận dùng nó để phát hiện frame bị mất, bị lặp, hoặc ECU gửi bị treo.
-- byte3 nhảy loạn, không có quy luật với mắt thường, và đổi mỗi khi counter đổi: gần như chắc chắn là **checksum/CRC** tính trên các byte còn lại cộng counter. Đó đúng là cặp "counter + CRC" của cơ chế **E2E protection** trong AUTOSAR.
+- byte3 nhảy loạn, không có quy luật với mắt thường, và đổi mỗi khi counter đổi: đó là **CRC**. Đã kiểm chứng: byte3 = CRC-8 SAE J1850 trên byte 0–2, khớp 871/880 frame (xem [can-frame-basics.vi.md](can-frame-basics.vi.md)). Đó đúng là cặp "counter + CRC" của cơ chế **E2E protection** trong AUTOSAR.
 
 `0x0E` có cùng kiểu: byte0 (`0x20`) và byte2 (`0x3F`) cố định, byte1 dao động chậm trong khoảng `0x5D`–`0x73`, **nibble cao byte6 là counter** (`20, 30, 50, 60…`), byte7 là checksum.
 
@@ -84,7 +84,7 @@ Ba điều cần biết khi đọc chu kỳ trong file này, vì chúng là "l�
 2. **Frame bị ghi trùng.** 736 dòng giống hệt một dòng khác (cùng timestamp, cùng data). Trên bus thật một frame không thể xuất hiện hai lần cùng lúc, đây là bộ ghi gửi lặp. Nên đếm chu kỳ trên dữ liệu đã bỏ trùng.
 3. **Frame bị mất.** Counter của `0x0E` nhảy cóc 123 lần trên 722 frame (ví dụ `3 → 5`, thiếu 4). Bộ ghi không theo kịp tải bus.
 
-Có thêm một dấu hiệu nữa: có 54 chỗ một byte đang là `FF` thì frame kế tiếp cùng ID thành `F1` rồi lại về `FF` (ví dụ `0x102` tại 166,154 s: `A2,F1` rồi `A2,FF` cùng timestamp). Bus CAN có CRC 15 bit, frame sai bit sẽ bị loại ngay trên bus, nên giá trị `F1` này nhiều khả năng do bộ ghi/đường serial làm hỏng. Đây là suy luận, không kiểm chứng được từ file. Bài học: **luôn nghi ngờ dữ liệu log trước khi nghi ngờ ECU**.
+Có thêm một dấu hiệu nữa: có 54 chỗ một byte đang là `FF` thì frame kế tiếp cùng ID thành `F1` rồi lại về `FF` (ví dụ `0x102` tại 166,154 s: `A2,F1` rồi `A2,FF` cùng timestamp). Bus CAN có CRC 15 bit, frame sai bit sẽ bị loại ngay trên bus, nên giá trị `F1` này nhiều khả năng do bộ ghi/đường serial làm hỏng. CRC-8 trong data xác nhận điều đó: cả 9 frame `0x228` sai CRC đều là frame chứa `F1`. Bài học: **luôn nghi ngờ dữ liệu log trước khi nghi ngờ ECU**.
 
 ## 5. Đoán signal không cần DBC: ví dụ `0x102`
 
