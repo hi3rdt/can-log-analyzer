@@ -39,7 +39,7 @@ python -m cantools decode --single-line config/gateway.dbc < samples/demo_drive.
 5. **RE Tools → Sniffer**: chọn **Never Expire IDs**. Sniffer tô màu byte vừa đổi giá trị; tick **Notch** để "đánh dấu" trạng thái hiện tại, sau đó chỉ những bit thay đổi tiếp mới sáng lên. Đây là kỹ thuật bit-flip cơ bản: đứng yên, notch, rồi thao tác một thứ trên xe và xem bit nào sáng.
 
 **Tự kiểm tra (Bài 1):**
-- `0x102` có 936 frame trong 8,56 s, tức chu kỳ khoảng 9 ms ≈ **10 ms**. `0x0E` có 725 frame (≈ 12 ms). `0x754` có 529 frame (≈ 16 ms). Các ID `0x3xx` chỉ có 4–11 frame (chu kỳ ≈ 1 s): thường là frame trạng thái/cấu hình chậm.
+- `0x102` có 936 frame trong 8,56 s (826 sau khi bỏ dòng trùng), tức chu kỳ ≈ **10 ms**. `0x0E` có 725 frame nhưng counter nhảy cóc 123 lần, nên chu kỳ thật ≈ 10 ms và bộ ghi đã làm mất frame. `0x754` có 529 frame (≈ 16 ms). Các ID `0x3xx` chỉ có 4–11 frame (chu kỳ ≈ 1 s): thường là frame trạng thái/cấu hình chậm. Lưu ý timestamp của file này chỉ chính xác tới 10 ms (xem bản giải thích chi tiết).
 - Câu hỏi cho bạn: trong `0x102`, có nibble nào tăng đều 0→F rồi quay vòng không (alive counter)? Ghi lại byte/bit và cách bạn nhận ra nó trong Frame Data Analysis.
 
 > Ghi chú automotive: chu kỳ 10/20/100/1000 ms là các "task rate" kinh điển của ECU (OS task 10 ms cho powertrain/chassis, 100 ms cho body, 1 s cho diag/odometer). Nhìn chu kỳ là đoán được frame thuộc domain nào trước cả khi có DBC.
