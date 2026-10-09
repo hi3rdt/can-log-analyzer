@@ -1,4 +1,4 @@
-# Learning Roadmap & CV Project — AUTOSAR-style BSW/ASW + CAN on STM32F103
+# Learning Roadmap & CV Project — AUTOSAR-style BSW CAN stack on STM32F103
 
 Owner: hi3rdt · Date: 2026-10-09
 Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (offline)
@@ -43,10 +43,10 @@ Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (
 - Deliverable: STM32 in loopback receives its own frames; SavvyCAN shows them.
 
 ### Phase 4 — AUTOSAR concepts mapped onto your code (week 4–6, overlaps)
-- Layered architecture: MCAL → ECU Abstraction → Services → RTE → SWC.
-- Communication stack path: `Can` → `CanIf` → `PduR` → `Com` → `RTE` → SWC (and back for TX).
-- Concepts to actually implement (simplified): PDU, I-PDU vs. L-PDU, signal/PDU configuration tables, Com TX modes (periodic / direct / mixed), deadline monitoring (timeout → substitute value), update bits.
-- Read-only theory (no implementation needed for CV): EcuM/BswM, Det, NvM/MemIf, Dcm/UDS basics, E2E protection profiles (CRC + alive counter).
+- Layered architecture: MCAL → ECU Abstraction → Services → RTE → SWC. Know all layers, **implement only the BSW part** (MCAL, ECU Abstraction, Services).
+- Communication stack path: `Can` → `CanIf` → `PduR` → `Com` → (RTE → SWC in a real ECU). In this project the Com public API (`Com_ReceiveSignal` / `Com_SendSignal`) is the upper boundary.
+- Concepts to actually implement (simplified): PDU, I-PDU vs. L-PDU, signal/PDU configuration tables, Com TX modes (periodic / direct / mixed), deadline monitoring (timeout → substitute value), update bits, PduR PDU gateway, Com signal gateway.
+- Read-only theory (no implementation needed for CV): RTE and SWC/runnables, EcuM/BswM, NvM/MemIf, Dcm/UDS basics, E2E protection profiles (CRC + alive counter).
 - Reference: AUTOSAR Classic SWS documents for Can, CanIf, PduR, Com (free on autosar.org) — read only API + config sections.
 
 ### Phase 5 — CV project build (week 6–10)
@@ -54,12 +54,15 @@ See section 2. Final week: README, architecture diagram, demo video/GIF from Sav
 
 ---
 
-## 2. CV project options
+## 2. CV project
 
-### Option A (recommended): "Mini AUTOSAR-like CAN ECU on STM32 with DBC-driven Com stack and log replay"
+### Scope decision (2026-10-09): BSW only, no RTE/ASW
+The project implements only the **BSW communication stack**. RTE and application SWCs are dropped on purpose: in industry they are produced by tool chains (Vector DaVinci, EB tresos, ETAS ISOLAR) that a personal project cannot access, so a hand-written "RTE" invites the question "how did you do that without the tools?". A hand-written subset of the Can/CanIf/PduR/Com SWS APIs, configured by a small DBC-to-C generator, is honest, explainable line by line, and is exactly what BSW integration/development roles work on daily.
+
+### Option A (chosen): "AUTOSAR-like BSW CAN communication stack on STM32 (gateway ECU), DBC-driven, verified with log replay"
 
 One-line pitch for the CV:
-> Designed a layered (AUTOSAR Classic–inspired) CAN ECU firmware on STM32F103: bare-metal bxCAN driver, CanIf/PduR/Com/RTE layers generated from a DBC, application SWCs, log-replay HIL setup verified in SavvyCAN; MISRA C:2012 checked, unit-tested on host.
+> Implemented an AUTOSAR Classic–inspired BSW CAN communication stack on STM32F103 without commercial tooling: register-level bxCAN driver, CanIf, PduR (PDU gateway), Com (signal pack/unpack, signal gateway, deadline monitoring, periodic TX) and Det; configuration generated from DBC by a Python tool; verified by replaying real-vehicle CAN logs and decoding the output in SavvyCAN; MISRA C:2012 oriented, unit-tested on host, CI on GitHub Actions.
 
 Architecture:
 
@@ -69,60 +72,58 @@ Architecture:
  │ replay.py             │────────────▶│ CddUartGw  (log frames in / out)        │
  │  reads .csv/.asc/.log │◀────────────│        │                                │
  │  real timestamps      │             │        ▼                                │
- └───────────────────────┘             │ Can (MCAL, bxCAN, loopback or normal)   │
+ └───────────────────────┘             │ Can    (MCAL, bxCAN, loopback/normal)   │
  ┌───────────────────────┐             │ CanIf  (HRH/HTH mapping, RX indication) │
- │ SavvyCAN              │◀── capture ─│ PduR   (routing table)                  │
- │  DBC decode / graphs  │   (UART or  │ Com    (signal pack/unpack, timeouts,   │
- │  verify ECU outputs   │   CANable)  │         periodic TX)                    │
- └───────────────────────┘             │ Rte    (generated Rte_Read/Rte_Write)   │
- ┌───────────────────────┐             │ SWC: SpeedMonitor, LightCtrl, DoorLogic │
- │ dbc2c.py (codegen)    │── *.c/h ──▶ │ OS: 1 ms SysTick cooperative scheduler  │
- └───────────────────────┘             │      (1/10/100 ms tasks)                │
-                                       │ Det (dev error tracer → UART)           │
+ │ SavvyCAN              │◀── capture ─│ PduR   (routing table, PDU gateway)     │
+ │  DBC decode / graphs  │   (UART or  │ Com    (signal pack/unpack, signal      │
+ │  verify ECU outputs   │   CANable)  │         gateway, deadline monitoring,   │
+ └───────────────────────┘             │         periodic TX)                    │
+ ┌───────────────────────┐             │ ComTest (thin hook calling the public   │
+ │ dbc2c.py (codegen)    │── *.c/h ──▶ │          Com_ReceiveSignal/SendSignal)  │
+ └───────────────────────┘             │ Os     (1 ms SysTick cooperative tasks) │
+                                       │ Det    (dev error tracer → UART)        │
                                        └─────────────────────────────────────────┘
 ```
 
-Data flow: a real-car log is replayed with original timing → frames enter the STM32 → go through the full stack → SWCs compute outputs (e.g. "overspeed warning", "lights on when dark & speed > 0", "door unlock on crash/stop") → output PDUs are transmitted periodically by Com → captured in SavvyCAN and decoded with **your own output DBC**. Stop the replay → Com deadline monitoring fires → substitute values + Det report visible in the log. That timeout demo is a strong interview talking point.
+Data flow: a real-car log is replayed with original timing → frames enter the STM32 → `Can` → `CanIf` → `PduR`. PduR either routes a whole PDU to a TX PDU (PDU gateway, e.g. ID translation) or hands it to `Com`. `Com` unpacks signals, applies the **signal gateway** (copy selected input signals into output PDUs defined in **your own output DBC**) and transmits output PDUs periodically → captured in SavvyCAN and decoded with that output DBC. Stop the replay → Com deadline monitoring fires → substitute values + Det report visible in the log. That timeout demo is a strong interview talking point. No application logic is needed: a gateway ECU is a legitimate BSW-only product.
 
-Why this one:
+Why this scope:
 - Matches the constraint (log files, no car) while still being real embedded work on your hardware.
-- Shows exactly the BSW vs. ASW split recruiters for Bosch/Continental/FPT/LG VS look for.
-- Code generation from DBC mirrors how real AUTOSAR configuration tools (DaVinci, EB tresos) produce `Com_Cfg.c`.
-- Scales: optional add-ons are E2E (CRC8 SAE-J1850 + alive counter), UDS ReadDataByIdentifier (0x22) on a diagnostic ID, a second Blue Pill as a real bus partner.
+- Every line is yours and explainable; no "fake" RTE pretending to be tool output.
+- The DBC-to-C generator mirrors what configuration tools do (`Com_Cfg.c`, `PduR_Cfg.c`), so you can explain generated code in interviews.
+- Scales: optional add-ons are E2E (CRC8 SAE-J1850 + alive counter) in Com, UDS ReadDataByIdentifier (0x22) via a minimal CanTp/Dcm, a second Blue Pill as a real bus partner.
 
-Suggested repository layout:
+Repository: `github.com/hi3rdt/can-log-analyzer`. Layout:
 
 ```
-mini-autosar-can-ecu/
+can-log-analyzer/
 ├── bsw/
+│   ├── include/         Std_Types.h, ComStack_Types.h, Platform_Types.h
 │   ├── mcal/can/        Can.c, Can.h, Can_Cfg.h           (bxCAN register-level)
 │   ├── ecual/canif/     CanIf.c, CanIf_Cfg.c
 │   ├── services/pdur/   PduR.c, PduR_Cfg.c
 │   ├── services/com/    Com.c, Com_Cfg.c (generated)
 │   ├── services/det/    Det.c
 │   └── os/              Os.c (SysTick scheduler)
-├── rte/                 Rte.c, Rte_<Swc>.h (generated)
-├── asw/                 SpeedMonitor.c, LightCtrl.c, DoorLogic.c
 ├── cdd/uartgw/          CddUartGw.c (frame bridge to PC)
-├── config/              input.dbc, output.dbc, ecu_config.yaml
+├── platform/stm32f103/  startup, linker script, register definitions
+├── app/                 main.c + ComTest hook (no RTE, no SWC)
+├── config/              input.dbc, output.dbc, gateway.yaml
 ├── tools/               dbc2c.py, replay.py, verify.py (cantools)
-├── test/host/           Unity tests for Com pack/unpack, PduR, timeouts
-├── docs/                architecture.md, diagrams, SavvyCAN screenshots
-└── CMakeLists.txt       arm-none-eabi + host test targets
+├── test/host/           host unit tests for Com, PduR, CanIf, timeouts
+├── docs/                roadmap, architecture.md, SavvyCAN screenshots
+└── CMakeLists.txt       arm-none-eabi firmware + host test targets
 ```
 
-Milestones:
-1. Host-tested `Com` pack/unpack + `dbc2c.py` generator (Phase 2 output reused).
-2. `Can` driver in loopback + `CddUartGw`; frames visible on PC.
-3. `CanIf` → `PduR` → `Com` → `Rte` path; one SWC reading one signal.
-4. Replay a real log, 3 SWCs, output PDUs decoded in SavvyCAN.
-5. Deadline monitoring, Det, bus-off recovery; MISRA check (cppcheck `--addon=misra`), CI on GitHub Actions (host tests + cross build).
-6. README with diagrams, results, demo GIF.
+Milestones (one PR each):
+1. Repo skeleton: CMake (host tests + arm-none-eabi firmware), STM32F103 startup/linker script, `Std_Types.h`/`ComStack_Types.h`, Det, CI.
+2. Com path on host: `CanIf` → `PduR` → `Com` with `dbc2c.py` generating `Com_Cfg.c` / `PduR_Cfg.c` / `CanIf_Cfg.c`, host unit tests.
+3. `Can` bxCAN driver (loopback first) + `CddUartGw`; frames visible on PC.
+4. Os scheduler, Com periodic TX + deadline monitoring, signal gateway; replay a real log, outputs decoded in SavvyCAN.
+5. Bus-off recovery, MISRA check (cppcheck `--addon=misra`), README with diagrams, results, demo GIF.
 
-### Option B (lighter, PC-only): "CAN log analyzer & signal reverse-engineering tool"
-C++/Python tool that loads SavvyCAN/candump logs + DBC, decodes signals, detects anomalies (missing periodic frames, counter jumps, bad checksums, bus load), and exports reports. Faster to finish, but shows little embedded/BSW skill — use it only as a side tool inside Option A (`tools/verify.py`), not as the main CV project.
-
-**Recommendation: Option A**, with Option B's analyzer folded in as the verification tool.
+### Option B (not chosen as main project): "CAN log analyzer & signal reverse-engineering tool"
+C++/Python tool that loads SavvyCAN/candump logs + DBC, decodes signals, detects anomalies (missing periodic frames, counter jumps, bad checksums, bus load), and exports reports. Kept only as a side tool inside Option A (`tools/verify.py`).
 
 ---
 
@@ -140,7 +141,7 @@ typedef struct
     uint8_t  isSigned;   /* 0 = unsigned, 1 = two's complement */
 } Com_SignalCfgType;
 
-/* Returns the raw value; caller applies factor/offset in the RTE/SWC layer. */
+/* Returns the raw value; caller (Com user) applies factor/offset. */
 uint32_t Com_UnpackIntel(const uint8_t *pdu, const Com_SignalCfgType *cfg)
 {
     uint64_t frame = 0U;

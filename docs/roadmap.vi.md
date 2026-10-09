@@ -1,4 +1,4 @@
-# Lộ trình học & Project CV — Embedded SW kiểu AUTOSAR (BSW/ASW) + CAN trên STM32F103
+# Lộ trình học & Project CV — Communication stack CAN phần BSW kiểu AUTOSAR trên STM32F103
 
 Người học: hi3rdt · Ngày: 2026-10-09
 Phần cứng: STM32F103C8T6 (Blue Pill, bxCAN) · Công cụ: SavvyCAN, file log CAN (offline)
@@ -45,10 +45,10 @@ Phần cứng: STM32F103C8T6 (Blue Pill, bxCAN) · Công cụ: SavvyCAN, file lo
 - Sản phẩm: STM32 ở chế độ loopback nhận lại chính frame nó gửi; SavvyCAN hiển thị được các frame đó.
 
 ### Giai đoạn 4 — Ánh xạ khái niệm AUTOSAR vào code của bạn (tuần 4–6, chạy song song)
-- Kiến trúc phân lớp: MCAL → ECU Abstraction → Services → RTE → SWC.
-- Đường đi của communication stack: `Can` → `CanIf` → `PduR` → `Com` → `RTE` → SWC (và chiều ngược lại khi TX).
-- Các khái niệm sẽ thực sự implement (dạng đơn giản hóa): PDU, I-PDU và L-PDU, bảng cấu hình signal/PDU, các chế độ TX của Com (periodic / direct / mixed), deadline monitoring (timeout → giá trị thay thế), update bit.
-- Chỉ đọc lý thuyết (không cần implement cho CV): EcuM/BswM, Det, NvM/MemIf, cơ bản Dcm/UDS, các profile bảo vệ E2E (CRC + alive counter).
+- Kiến trúc phân lớp: MCAL → ECU Abstraction → Services → RTE → SWC. Cần hiểu tất cả các lớp, nhưng **chỉ implement phần BSW** (MCAL, ECU Abstraction, Services).
+- Đường đi của communication stack: `Can` → `CanIf` → `PduR` → `Com` → (RTE → SWC trong ECU thật). Trong project này, API public của Com (`Com_ReceiveSignal` / `Com_SendSignal`) là ranh giới trên cùng.
+- Các khái niệm sẽ thực sự implement (dạng đơn giản hóa): PDU, I-PDU và L-PDU, bảng cấu hình signal/PDU, các chế độ TX của Com (periodic / direct / mixed), deadline monitoring (timeout → giá trị thay thế), update bit, PDU gateway của PduR, signal gateway của Com.
+- Chỉ đọc lý thuyết (không cần implement cho CV): RTE và SWC/runnable, EcuM/BswM, NvM/MemIf, cơ bản Dcm/UDS, các profile bảo vệ E2E (CRC + alive counter).
 - Tài liệu tham khảo: các tài liệu SWS AUTOSAR Classic cho Can, CanIf, PduR, Com (miễn phí trên autosar.org) — chỉ cần đọc phần API và cấu hình.
 
 ### Giai đoạn 5 — Xây dựng project CV (tuần 6–10)
@@ -56,12 +56,15 @@ Xem mục 2. Tuần cuối: README, sơ đồ kiến trúc, video/GIF demo từ 
 
 ---
 
-## 2. Các lựa chọn project CV
+## 2. Project CV
 
-### Option A (đề xuất): "ECU CAN kiểu AUTOSAR thu nhỏ trên STM32, stack Com sinh từ DBC và phát lại log"
+### Quyết định phạm vi (2026-10-09): chỉ làm BSW, bỏ RTE/ASW
+Project chỉ implement **communication stack phần BSW**. RTE và các SWC ứng dụng được bỏ có chủ đích: trong công nghiệp, chúng được sinh ra bởi bộ tool (Vector DaVinci, EB tresos, ETAS ISOLAR) mà project cá nhân không có, nên một "RTE" tự viết tay dễ bị hỏi "không có tool thì làm thế nào?". Một tập con API theo SWS của Can/CanIf/PduR/Com, viết tay và được cấu hình bằng một script nhỏ sinh code từ DBC, thì trung thực, giải thích được từng dòng, và đúng là thứ mà các vị trí BSW integration/development làm hằng ngày.
+
+### Option A (đã chọn): "Communication stack CAN phần BSW kiểu AUTOSAR trên STM32 (gateway ECU), cấu hình từ DBC, kiểm chứng bằng phát lại log"
 
 Câu giới thiệu để ghi vào CV (giữ tiếng Anh khi đưa vào CV):
-> Designed a layered (AUTOSAR Classic–inspired) CAN ECU firmware on STM32F103: bare-metal bxCAN driver, CanIf/PduR/Com/RTE layers generated from a DBC, application SWCs, log-replay HIL setup verified in SavvyCAN; MISRA C:2012 checked, unit-tested on host.
+> Implemented an AUTOSAR Classic–inspired BSW CAN communication stack on STM32F103 without commercial tooling: register-level bxCAN driver, CanIf, PduR (PDU gateway), Com (signal pack/unpack, signal gateway, deadline monitoring, periodic TX) and Det; configuration generated from DBC by a Python tool; verified by replaying real-vehicle CAN logs and decoding the output in SavvyCAN; MISRA C:2012 oriented, unit-tested on host, CI on GitHub Actions.
 
 Kiến trúc:
 
@@ -71,60 +74,58 @@ Kiến trúc:
  │ replay.py             │────────────▶│ CddUartGw  (log frames in / out)        │
  │  reads .csv/.asc/.log │◀────────────│        │                                │
  │  real timestamps      │             │        ▼                                │
- └───────────────────────┘             │ Can (MCAL, bxCAN, loopback or normal)   │
+ └───────────────────────┘             │ Can    (MCAL, bxCAN, loopback/normal)   │
  ┌───────────────────────┐             │ CanIf  (HRH/HTH mapping, RX indication) │
- │ SavvyCAN              │◀── capture ─│ PduR   (routing table)                  │
- │  DBC decode / graphs  │   (UART or  │ Com    (signal pack/unpack, timeouts,   │
- │  verify ECU outputs   │   CANable)  │         periodic TX)                    │
- └───────────────────────┘             │ Rte    (generated Rte_Read/Rte_Write)   │
- ┌───────────────────────┐             │ SWC: SpeedMonitor, LightCtrl, DoorLogic │
- │ dbc2c.py (codegen)    │── *.c/h ──▶ │ OS: 1 ms SysTick cooperative scheduler  │
- └───────────────────────┘             │      (1/10/100 ms tasks)                │
-                                       │ Det (dev error tracer → UART)           │
+ │ SavvyCAN              │◀── capture ─│ PduR   (routing table, PDU gateway)     │
+ │  DBC decode / graphs  │   (UART or  │ Com    (signal pack/unpack, signal      │
+ │  verify ECU outputs   │   CANable)  │         gateway, deadline monitoring,   │
+ └───────────────────────┘             │         periodic TX)                    │
+ ┌───────────────────────┐             │ ComTest (thin hook calling the public   │
+ │ dbc2c.py (codegen)    │── *.c/h ──▶ │          Com_ReceiveSignal/SendSignal)  │
+ └───────────────────────┘             │ Os     (1 ms SysTick cooperative tasks) │
+                                       │ Det    (dev error tracer → UART)        │
                                        └─────────────────────────────────────────┘
 ```
 
-Luồng dữ liệu: một file log của xe thật được phát lại với đúng timing gốc → frame đi vào STM32 → đi qua toàn bộ stack → các SWC tính toán output (ví dụ "cảnh báo quá tốc độ", "bật đèn khi trời tối và xe đang chạy", "mở khóa cửa khi va chạm/dừng xe") → Com gửi các PDU output theo chu kỳ → SavvyCAN thu lại và decode bằng **file DBC output do chính bạn viết**. Khi dừng replay → deadline monitoring của Com kích hoạt → giá trị thay thế + báo cáo Det xuất hiện trong log. Phần demo timeout này là điểm rất mạnh để nói khi phỏng vấn.
+Luồng dữ liệu: một file log của xe thật được phát lại với đúng timing gốc → frame đi vào STM32 → `Can` → `CanIf` → `PduR`. PduR hoặc chuyển nguyên PDU sang một PDU TX (PDU gateway, ví dụ đổi ID), hoặc đưa lên `Com`. `Com` unpack signal, thực hiện **signal gateway** (chép các signal đầu vào được chọn sang các PDU output định nghĩa trong **file DBC output do chính bạn viết**) và gửi các PDU output theo chu kỳ → SavvyCAN thu lại và decode bằng DBC output đó. Khi dừng replay → deadline monitoring của Com kích hoạt → giá trị thay thế + báo cáo Det xuất hiện trong log. Phần demo timeout này là điểm rất mạnh để nói khi phỏng vấn. Không cần logic ứng dụng: gateway ECU là một sản phẩm hợp lệ chỉ gồm BSW.
 
-Vì sao chọn option này:
+Vì sao chọn phạm vi này:
 - Phù hợp ràng buộc (dùng file log, không có xe) mà vẫn là công việc embedded thật trên phần cứng của bạn.
-- Thể hiện đúng sự phân tách BSW và ASW mà nhà tuyển dụng như Bosch/Continental/FPT/LG VS tìm kiếm.
-- Sinh code từ DBC mô phỏng cách các tool cấu hình AUTOSAR thật (DaVinci, EB tresos) sinh ra `Com_Cfg.c`.
-- Mở rộng được: các phần thêm tùy chọn gồm E2E (CRC8 SAE-J1850 + alive counter), UDS ReadDataByIdentifier (0x22) trên một ID chẩn đoán, thêm một Blue Pill thứ hai làm node thật trên bus.
+- Mọi dòng code đều do bạn viết và giải thích được; không có "RTE giả" đóng vai output của tool.
+- Script sinh code từ DBC mô phỏng việc các tool cấu hình làm (`Com_Cfg.c`, `PduR_Cfg.c`), nên bạn có thể giải thích code sinh ra khi phỏng vấn.
+- Mở rộng được: các phần thêm tùy chọn gồm E2E (CRC8 SAE-J1850 + alive counter) trong Com, UDS ReadDataByIdentifier (0x22) qua CanTp/Dcm tối giản, thêm một Blue Pill thứ hai làm node thật trên bus.
 
-Cấu trúc repository đề xuất:
+Repository: `github.com/hi3rdt/can-log-analyzer`. Cấu trúc:
 
 ```
-mini-autosar-can-ecu/
+can-log-analyzer/
 ├── bsw/
+│   ├── include/         Std_Types.h, ComStack_Types.h, Platform_Types.h
 │   ├── mcal/can/        Can.c, Can.h, Can_Cfg.h           (bxCAN register-level)
 │   ├── ecual/canif/     CanIf.c, CanIf_Cfg.c
 │   ├── services/pdur/   PduR.c, PduR_Cfg.c
 │   ├── services/com/    Com.c, Com_Cfg.c (generated)
 │   ├── services/det/    Det.c
 │   └── os/              Os.c (SysTick scheduler)
-├── rte/                 Rte.c, Rte_<Swc>.h (generated)
-├── asw/                 SpeedMonitor.c, LightCtrl.c, DoorLogic.c
 ├── cdd/uartgw/          CddUartGw.c (frame bridge to PC)
-├── config/              input.dbc, output.dbc, ecu_config.yaml
+├── platform/stm32f103/  startup, linker script, register definitions
+├── app/                 main.c + ComTest hook (no RTE, no SWC)
+├── config/              input.dbc, output.dbc, gateway.yaml
 ├── tools/               dbc2c.py, replay.py, verify.py (cantools)
-├── test/host/           Unity tests for Com pack/unpack, PduR, timeouts
-├── docs/                architecture.md, diagrams, SavvyCAN screenshots
-└── CMakeLists.txt       arm-none-eabi + host test targets
+├── test/host/           host unit tests for Com, PduR, CanIf, timeouts
+├── docs/                roadmap, architecture.md, SavvyCAN screenshots
+└── CMakeLists.txt       arm-none-eabi firmware + host test targets
 ```
 
-Các mốc:
-1. Module `Com` pack/unpack đã test trên PC + bộ sinh code `dbc2c.py` (tái sử dụng kết quả giai đoạn 2).
-2. Driver `Can` ở chế độ loopback + `CddUartGw`; thấy được frame trên PC.
-3. Đường đi `CanIf` → `PduR` → `Com` → `Rte`; một SWC đọc được một signal.
-4. Phát lại một log thật, chạy 3 SWC, các PDU output được decode trong SavvyCAN.
-5. Deadline monitoring, Det, phục hồi bus-off; kiểm tra MISRA (cppcheck `--addon=misra`), CI trên GitHub Actions (host test + cross build).
-6. README kèm sơ đồ, kết quả, GIF demo.
+Các mốc (mỗi mốc một PR):
+1. Khung repo: CMake (host test + firmware arm-none-eabi), startup/linker script cho STM32F103, `Std_Types.h`/`ComStack_Types.h`, Det, CI.
+2. Đường Com trên PC: `CanIf` → `PduR` → `Com`, `dbc2c.py` sinh `Com_Cfg.c` / `PduR_Cfg.c` / `CanIf_Cfg.c`, kèm host unit test.
+3. Driver `Can` cho bxCAN (loopback trước) + `CddUartGw`; thấy được frame trên PC.
+4. Os scheduler, Com periodic TX + deadline monitoring, signal gateway; phát lại log thật, decode output trong SavvyCAN.
+5. Phục hồi bus-off, kiểm tra MISRA (cppcheck `--addon=misra`), README kèm sơ đồ, kết quả, GIF demo.
 
-### Option B (nhẹ hơn, chỉ chạy trên PC): "Công cụ phân tích log CAN & reverse-engineer signal"
-Công cụ C++/Python đọc log SavvyCAN/candump + DBC, decode signal, phát hiện bất thường (thiếu frame định kỳ, counter nhảy cóc, checksum sai, bus load) và xuất báo cáo. Làm nhanh hơn nhưng thể hiện rất ít kỹ năng embedded/BSW — chỉ nên dùng làm công cụ phụ bên trong Option A (`tools/verify.py`), không nên là project chính trong CV.
-
-**Đề xuất: Option A**, gộp phần analyzer của Option B vào làm công cụ kiểm tra.
+### Option B (không chọn làm project chính): "Công cụ phân tích log CAN & reverse-engineer signal"
+Công cụ C++/Python đọc log SavvyCAN/candump + DBC, decode signal, phát hiện bất thường (thiếu frame định kỳ, counter nhảy cóc, checksum sai, bus load) và xuất báo cáo. Chỉ giữ lại làm công cụ phụ bên trong Option A (`tools/verify.py`).
 
 ---
 
@@ -142,7 +143,7 @@ typedef struct
     uint8_t  isSigned;   /* 0 = unsigned, 1 = two's complement */
 } Com_SignalCfgType;
 
-/* Returns the raw value; caller applies factor/offset in the RTE/SWC layer. */
+/* Returns the raw value; caller (Com user) applies factor/offset. */
 uint32_t Com_UnpackIntel(const uint8_t *pdu, const Com_SignalCfgType *cfg)
 {
     uint64_t frame = 0U;
