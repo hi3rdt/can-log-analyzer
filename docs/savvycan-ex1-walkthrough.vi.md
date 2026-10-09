@@ -118,6 +118,59 @@ Hai frame đặc biệt:
 4. **Sniffer + Notch**: thao tác một thứ (thật hoặc trong đoạn log có sự kiện), xem bit nào sáng.
 5. Viết giả thuyết thành dòng `SG_` trong DBC, nạp lại, vẽ đồ thị để chứng minh. Đó là Bài 4 trong hướng dẫn chính.
 
+## 7. Ví dụ áp dụng mục 6: `0x168` và `0x116`
+
+Các con số dưới đây tính trên frame đã bỏ dòng trùng và bỏ frame chứa byte hỏng `F1`.
+
+### `0x168` — DLC 8, chu kỳ 25 ms, 332 frame
+
+```
+byte:  0  1  2  3  4  5  6  7
+      A9 0C 1C 7F 00 00 F0 A6
+      A9 0C 1C 7F 00 00 20 D6
+      A8 0C 1C 7F 00 00 30 E5
+      A9 0C 1C 7F 00 00 40 F6
+```
+
+| Bước | Quan sát | Kết luận |
+|---|---|---|
+| Byte cố định | byte2 = `1C`, byte3 = `7F`, byte4 = `00`, byte5 = `00` trong cả log | hằng số hoặc signal không hoạt động lúc ghi log |
+| Counter | nibble cao byte6: `F, 2, 3, 4, 7, 8, 9, B, C, E, F, 0…` (nhảy cóc là do bộ ghi mất frame) | **alive counter 4 bit** |
+| Checksum | byte7 đổi mỗi frame. Thử CRC-8 J1850 như `0x228` thì **không khớp**. Thử cộng: `byte7 = (byte0 + … + byte6 + 0x66) & 0xFF` khớp **332/332** | **checksum kiểu tổng (sum)**, không phải CRC. Ví dụ: `A9+0C+1C+7F+00+00+F0 = 0x240`, `+0x66 = 0x2A6`, lấy byte thấp = `A6` |
+| Giá trị vật lý | byte0 dao động `A8…FC` rồi quay về `02`, đúng lúc byte1 đổi `0C → 0D` | byte0 và byte1 là **một số 16 bit little-endian**: `0x0CA9`… `0x0D35`, tức 3239…3381, thay đổi trơn tru |
+| Đoán ý nghĩa | `0x0CA9` × 0,25 = **810**, khoảng giá trị 810–845 | rất giống **tốc độ động cơ (rpm) ở chế độ idle** với hệ số 0,25 rpm/bit, đúng hệ số `EngineRpm` trong DBC của project. Đây là **giả thuyết**; cần log lúc đạp ga để khẳng định |
+
+DBC giả thuyết:
+
+```
+BO_ 360 Unknown_168: 8 XXX
+ SG_ EngineSpeed_guess : 0|16@1+ (0.25,0) [0|16383.75] "rpm" Vector__XXX
+ SG_ Counter_168 : 52|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ Checksum_168 : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+```
+
+### `0x116` — DLC 6, chu kỳ 10 ms, 825 frame
+
+```
+byte:  0  1  2  3  4  5
+      00 10 F4 11 8E BA
+      00 10 F4 11 8F BB
+      00 10 F4 11 80 AC
+      00 10 F4 11 82 AE
+```
+
+| Bước | Quan sát | Kết luận |
+|---|---|---|
+| Byte cố định | byte0 = `00` trong cả log | hằng số |
+| Counter | **nibble thấp** byte4 tăng `E, F, 0, 2, 3…` | **counter 4 bit**, lần này nằm ở nibble thấp. Nibble cao của byte4 đổi `8 → 9` cùng lúc với byte1 đổi `10 → 90`, nên nhiều khả năng là một cờ trạng thái |
+| Checksum | `byte5 = (byte0 + … + byte4 + 0x16 + 0x01) & 0xFF` khớp **825/825** | **checksum = tổng data + 2 byte của chính ID** (`0x116` → `0x16`, `0x01`). Thêm ID vào checksum giúp phát hiện frame bị gửi nhầm ID |
+| Còn lại | byte1 (bit 7 bật/tắt), byte2, byte3 thay đổi chậm | các trạng thái/giá trị chưa đủ dữ liệu để đoán |
+
+Bài học rút ra:
+- Cùng một xe nhưng mỗi ECU dùng một kiểu bảo vệ khác nhau: `0x228` dùng CRC-8 J1850, còn `0x168` và `0x116` dùng checksum tổng (cộng thêm ID hoặc một hằng số). Khi reverse-engineer, thử theo thứ tự: tổng, XOR, CRC-8 J1850, rồi các CRC khác.
+- Counter có thể nằm ở nibble cao hoặc nibble thấp, và ở bất kỳ byte nào.
+- Hai byte cạnh nhau mà một byte "quay vòng" đúng lúc byte kia tăng 1 thì đó là một số 16 bit.
+
 ## Bài tập tự làm
 
 1. Làm lại mục 3 cho `0x1F8`: byte nào cố định, byte nào là counter, có checksum không?
