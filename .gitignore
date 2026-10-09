@@ -1,0 +1,72 @@
+# Build output
+build/
+build-*/
+cmake-build-*/
+Debug/
+Release/
+out/
+
+# Object files and binaries
+*.o
+*.obj
+*.d
+*.su
+*.a
+*.lib
+*.so
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.list
+*.srec
+*.out
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# IDE / editor
+.vscode/
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*~
+.settings/
+.metadata/
+*.launch
+
+# STM32CubeIDE / Keil
+*.uvguix.*
+*.uvoptx
+RTE/_*/
+Debug_*/
+
+# Python tooling
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Coverage / static analysis
+*.gcda
+*.gcno
+*.gcov
+coverage/
+cppcheck-report*/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large raw captures (commit only small sample logs under samples/)
+*.pcap
+*.blf
