@@ -20,6 +20,7 @@ set(BSW_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/gen
 )
 set(BSW_SOURCES
+    ${CMAKE_SOURCE_DIR}/bsw/mcal/can/Can_Hw.c
     ${CMAKE_SOURCE_DIR}/bsw/ecual/canif/CanIf.c
     ${CMAKE_SOURCE_DIR}/bsw/services/pdur/PduR.c
     ${CMAKE_SOURCE_DIR}/bsw/services/com/Com.c
@@ -92,4 +93,12 @@ else()
     add_host_test(test_det)
     add_host_test(test_com_signal)
     add_host_test(test_comstack)
+
+    # Exercise 1 (docs/exercises/ex01-bxcan-driver.vi.md): OFF until Can_Hw.c
+    # is implemented, so CI stays green. Turn the default ON in the PR that
+    # adds the implementation.
+    option(CAN_HW_EXERCISE_TESTS "Build and run test_can_hw (bxCAN helper exercise)" OFF)
+    if(CAN_HW_EXERCISE_TESTS)
+        add_host_test(test_can_hw)
+    endif()
 endif()
