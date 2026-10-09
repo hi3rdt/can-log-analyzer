@@ -1,0 +1,49 @@
+VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_: ABS ECM BCM GW TESTER
+
+BO_ 256 VehicleSpeed: 8 ABS
+ SG_ VehicleSpeed : 0|16@1+ (0.01,0) [0|655.35] "km/h" GW
+ SG_ WheelSpeedFL : 16|12@1+ (0.1,0) [0|409.5] "km/h" GW
+ SG_ WheelSpeedFR : 28|12@1+ (0.1,0) [0|409.5] "km/h" GW
+ SG_ AbsActive : 40|1@1+ (1,0) [0|1] "" GW
+ SG_ SpeedCounter : 56|4@1+ (1,0) [0|15] "" GW
+ SG_ SpeedChecksum : 60|4@1+ (1,0) [0|15] "" GW
+
+BO_ 512 EngineData: 8 ECM
+ SG_ EngineRpm : 7|16@0+ (0.25,0) [0|16383.75] "rpm" GW
+ SG_ CoolantTemp : 23|8@0+ (1,-40) [-40|215] "degC" GW
+ SG_ ThrottlePos : 24|8@1+ (0.4,0) [0|100] "%" GW
+ SG_ EngineTorque : 37|11@0- (0.5,0) [-512|511.5] "Nm" GW
+
+BO_ 768 BodyStatus: 4 BCM
+ SG_ DoorFL : 0|1@1+ (1,0) [0|1] "" GW
+ SG_ DoorFR : 1|1@1+ (1,0) [0|1] "" GW
+ SG_ DoorRL : 2|1@1+ (1,0) [0|1] "" GW
+ SG_ DoorRR : 3|1@1+ (1,0) [0|1] "" GW
+ SG_ SteeringAngle : 16|16@1- (0.1,0) [-3276.8|3276.7] "deg" GW
+
+BO_ 2566844160 DiagExtended: 8 BCM
+ SG_ OdometerKm : 0|24@1+ (1,0) [0|16777215] "km" GW
+ SG_ AmbientTemp : 24|8@1- (0.5,0) [-64|63.5] "degC" GW
+
+BO_ 1024 GW_VehicleState: 8 GW
+ SG_ GW_VehicleSpeed : 0|16@1+ (0.01,0) [0|655.35] "km/h" TESTER
+ SG_ GW_EngineRpm : 16|16@1+ (0.25,0) [0|16383.75] "rpm" TESTER
+ SG_ GW_CoolantTemp : 32|8@1+ (1,-40) [-40|215] "degC" TESTER
+ SG_ GW_DoorsOpen : 40|4@1+ (1,0) [0|15] "" TESTER
+ SG_ GW_SteeringAngle : 55|16@0- (0.1,0) [-3276.8|3276.7] "deg" TESTER
+
+BO_ 1280 GW_BodyStatusFwd: 4 GW
+ SG_ Fwd_DoorFL : 0|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fwd_DoorFR : 1|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fwd_DoorRL : 2|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fwd_DoorRR : 3|1@1+ (1,0) [0|1] "" TESTER
+ SG_ Fwd_SteeringAngle : 16|16@1- (0.1,0) [-3276.8|3276.7] "deg" TESTER
+
+CM_ BO_ 1024 "Signals collected by the gateway from ABS/ECM/BCM (signal gateway, milestone 4).";
+CM_ BO_ 1280 "BodyStatus forwarded unchanged on a new ID by the PduR PDU gateway.";
