@@ -30,6 +30,8 @@ python -m cantools decode --single-line config/gateway.dbc < samples/demo_drive.
 
 ## Bài 1 — Đọc log thật không có DBC (`GVRET_Log.csv`)
 
+> Giải thích chi tiết từng cột CSV, từng con số và cách đọc byte: xem [savvycan-ex1-walkthrough.vi.md](savvycan-ex1-walkthrough.vi.md).
+
 1. **File → Load Log File**, chọn `GVRET_Log.csv`, ở ô loại file chọn *GVRET Logs (\*.csv)*. Cửa sổ chính hiện 12 974 dòng: Timestamp, ID, Ext, Dir, Bus, Len, Data.
 2. Bật **Overwrite Mode** (checkbox ở cửa sổ chính). Mỗi ID giờ chỉ còn một dòng và byte nào đang thay đổi sẽ nhảy liên tục; đây là chế độ giống *Trace* cố định vị trí trong CANoe. Tắt đi để quay lại xem theo thời gian.
 3. Cột **Frame Filtering** bên trái liệt kê mọi ID. Bấm **None** rồi chỉ tick `0x102` để chỉ xem một ID.
