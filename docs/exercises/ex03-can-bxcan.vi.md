@@ -1,6 +1,6 @@
 # Bài tập MCAL 3 — Driver `Can` (bxCAN)
 
-> Thứ tự bài MCAL: [1 Port/Dio](ex01-port-dio.vi.md) → 2 Mcu + Gpt (sắp có) → **3 Can** → 4 Adc (tùy chọn). Phần A của bài này là hàm thuần nên làm song song với bài 1 được; phần B và C dùng `Port` (bài 1) để cấu hình chân PB8/PB9 và `Mcu` (bài 2) để biết tần số PCLK1.
+> Thứ tự bài MCAL: [M1 Port/Dio](ex01-port-dio.vi.md) → M2 Mcu + Gpt (sắp có) → **M3 Can** → M4 Uart + SLCAN (sắp có) → M5 Adc (tùy chọn). Phần A của bài này là hàm thuần nên làm song song với bài 1 được; phần B và C dùng `Port` (bài 1) để cấu hình chân PB8/PB9 và `Mcu` (bài 2) để biết tần số PCLK1.
 
 Người học: hi3rdt · Bạn tự viết code, mình review · Tài liệu chính: **RM0008** (STM32F10x Reference Manual) chương 24 "Controller area network (bxCAN)"
 
@@ -10,9 +10,9 @@ Bài tập chia làm 3 phần, mỗi phần có tiêu chí "xong" rõ ràng. Ph�
 |---|---|---|---|
 | A | `bsw/mcal/can/Can_Hw.c`: các hàm thuần tính toán giá trị thanh ghi | `test/host/test_can_hw.c` (đã viết sẵn, 14 test, ~2 175 check, chạy dưới ASan/UBSan) | `test_can_hw` báo `0 failures` và bạn đổi option CMake sang `ON` |
 | B | `bsw/mcal/can/Can.c`: `Can_Init`, `Can_SetControllerMode`, `Can_Write` (truy cập thanh ghi) | Blue Pill ở chế độ **loopback**, debugger hoặc LED | Gửi một frame, nhận lại đúng ID/DLC/data |
-| C | 3 ISR: TX, RX FIFO0, SCE (lỗi/bus-off) + nối vào `CanIf` | Loopback + `CanIf_RxIndication` → `PduR` → `Com` đã có từ PR #3 | Frame `VehicleSpeed` gửi đi quay về và `Com_ReceiveSignal` đọc đúng giá trị |
+| C | 3 ISR: TX, RX FIFO0, SCE (lỗi/bus-off) + gọi callback của lớp trên (`CanIf`) | Loopback; `CanIf` đã có từ mốc 2 (đóng băng, chỉ dùng làm lớp gọi phía trên) | Frame gửi bằng `Can_Write` quay về và tới `CanIf_RxIndication` đúng ID, DLC, data |
 
-Sau khi `Can` chạy được, bước tiếp theo trong roadmap là `CddUartGw`: đưa frame lên PC qua UART theo định dạng SavvyCAN đọc được.
+Sau khi `Can` chạy được, bài tiếp theo là M4: driver `Uart` đẩy frame lên PC theo giao thức LAWICEL/SLCAN để SavvyCAN xem trực tiếp, rồi decode bằng DBC bạn viết ở [bài D1](dbc01-gvret-log.vi.md).
 
 ## Vì sao tách `Can_Hw.c` khỏi `Can.c`
 
@@ -87,7 +87,7 @@ Tên handler đã có trong `platform/stm32f103/startup_stm32f103.c`: `USB_HP_CA
 - **RX0 ISR:** lặp tối đa 3 lần (FIFO sâu 3) khi `FMP0 != 0`: đọc `RI0R`, `RDT0R`, `RDL0R`, `RDH0R` **trước** khi nhả FIFO bằng `RF0R = RFOM0`, rồi gọi `CanIf_RxIndication` với `Hoh = CAN_HRH_FIFO0`. DLC trong `RDT0R` là 4 bit, có thể > 8, nên kẹp lại. Kiểm tra `FOVR0` (mất frame) và báo Det.
 - **SCE ISR:** đọc `ESR`; `BOFF = 1` → ghi nhận bus-off (với `ABOM = 1` phần cứng tự phục hồi sau 128 × 11 bit lặn); xóa `MSR.ERRI` bằng cách ghi 1.
 
-Tiêu chí xong: trong `main.c`, gọi `Com_SendSignal` cho `VehicleSpeed`, frame đi qua `Com → PduR → CanIf → Can_Write`, quay lại qua loopback, đi lên `CanIf_RxIndication → PduR → Com`, và `Com_ReceiveSignal` đọc lại đúng giá trị. Đó là toàn bộ communication stack chạy thật trên chip lần đầu tiên.
+Tiêu chí xong: trong `main.c`, gọi `Can_Write` với một frame `0x100`, frame quay lại qua loopback và `CanIf_RxIndication` nhận đúng ID, DLC và data (đặt breakpoint hoặc so sánh rồi nháy LED bằng `Dio`). `CanIf`/`PduR`/`Com` là code đóng băng của mốc 2: chúng chỉ đóng vai lớp gọi phía trên theo đúng interface AUTOSAR, bạn không cần sửa gì trong đó. Thêm nếu muốn: gọi `Com_SendSignal` cho `VehicleSpeed` và đọc lại bằng `Com_ReceiveSignal` để thấy cả đường đi qua các lớp trên.
 
 ## Checklist review (mình sẽ dùng khi bạn push)
 

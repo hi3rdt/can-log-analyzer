@@ -2,7 +2,7 @@
 
 Người học: hi3rdt · Bạn tự viết code, mình review · Tài liệu chính: **RM0008** chương 9 "General-purpose and alternate-function I/Os" và mục 7.3.7 "APB2 peripheral clock enable register"
 
-> Thứ tự bài MCAL: **1 Port/Dio** → 2 Mcu + Gpt (sắp có) → [3 Can](ex03-can-bxcan.vi.md) → 4 Adc (tùy chọn). Xem [roadmap](../roadmap.vi.md#cập-nhật-phạm-vi-2026-10-11-mcal--can-stack) để biết vì sao project làm MCAL.
+> Thứ tự bài MCAL: **M1 Port/Dio** → M2 Mcu + Gpt (sắp có) → [M3 Can](ex03-can-bxcan.vi.md) → M4 Uart + SLCAN (sắp có) → M5 Adc (tùy chọn). Song song là nhánh DBC, bắt đầu từ [D1](dbc01-gvret-log.vi.md). Xem [roadmap](../roadmap.vi.md#phạm-vi-hiện-tại-2026-10-11-mcal--dbc-với-savvycan) để biết vì sao project chỉ làm MCAL và DBC.
 
 | Phần | Bạn viết | Kiểm chứng bằng | Xong khi |
 |---|---|---|---|

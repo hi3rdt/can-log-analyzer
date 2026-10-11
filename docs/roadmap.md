@@ -1,6 +1,6 @@
-# Learning Roadmap & CV Project — AUTOSAR-style MCAL + CAN stack on STM32F103
+# Learning Roadmap & CV Project — AUTOSAR-style MCAL + DBC with SavvyCAN on STM32F103
 
-Owner: hi3rdt · Date: 2026-10-09 · Updated: 2026-10-11 (MCAL + CAN stack)
+Owner: hi3rdt · Date: 2026-10-09 · Updated: 2026-10-11 (scope: MCAL + DBC with SavvyCAN)
 Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (offline)
 
 ---
@@ -29,7 +29,8 @@ Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (
 - Deliverable: short notes + screenshots of 3 decoded signals (goes into the project README later).
 - Sources of logs/DBC: `commaai/opendbc` (DBC files for real cars), `linklayer/cantools` test data, SavvyCAN sample logs. Pick one car brand with both a DBC and a log.
 
-### Phase 2 — DBC & signal math in C (week 2–3)
+### Phase 2 — Writing a DBC & the signal math behind it (week 2–3, DBC track)
+- Write your own DBC for a real log in SavvyCAN (exercise D1): `BO_` / `SG_` syntax, start bit and length, `@1` vs `@0`, `+`/`-`, factor/offset, `VAL_` tables, `CM_` comments, cycle-time attributes. Check it with cantools against the log.
 - Intel (little-endian) vs. Motorola (big-endian) bit numbering — the #1 source of decode bugs.
 - Physical = raw × factor + offset; signed signals; min/max; multiplexed signals.
 - Write a host-side C library `CanSig_Unpack/Pack` + unit tests (Unity or CppUTest) on PC, validate against `cantools` (Python) output for the same log.
@@ -40,114 +41,106 @@ Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (
 - Init/sleep/normal mode transitions (INRQ/INAK, SLEEP/SLAK), loopback mode for self-test.
 - 3 TX mailboxes, 2 RX FIFOs (3 deep each), 14 filter banks: ID-list vs. mask mode.
 - Interrupt-driven RX (USB_LP_CAN1_RX0 IRQ), TX-complete, error/bus-off handling (ABOM).
-- UART logging of every frame in **GVRET-like / SLCAN text** so SavvyCAN or a Python script can capture it.
-- Deliverable: STM32 in loopback receives its own frames; SavvyCAN shows them.
+- Uart driver streaming every frame in the **LAWICEL/SLCAN text protocol**, which SavvyCAN reads directly through a LAWICEL serial connection.
+- Deliverable: STM32 in loopback receives its own frames; SavvyCAN shows them live and decodes them with your DBC.
 
 ### Phase 4 — AUTOSAR concepts mapped onto your code (week 4–6, overlaps)
-- Layered architecture: MCAL → ECU Abstraction → Services → RTE → SWC. Know all layers, **implement only the BSW part** (MCAL, ECU Abstraction, Services).
+- Layered architecture: MCAL → ECU Abstraction → Services → RTE → SWC. Know all layers, **implement only the MCAL** (section 2). The CanIf/PduR/Com code from milestone 2 stays in the repo, frozen, as a worked example of the layers above.
 - Communication stack path: `Can` → `CanIf` → `PduR` → `Com` → (RTE → SWC in a real ECU). In this project the Com public API (`Com_ReceiveSignal` / `Com_SendSignal`) is the upper boundary.
-- Concepts to actually implement (simplified): PDU, I-PDU vs. L-PDU, signal/PDU configuration tables, Com TX modes (periodic / direct / mixed), deadline monitoring (timeout → substitute value), update bits, PduR PDU gateway, Com signal gateway.
+- Concepts the frozen milestone 2 code already shows (simplified): PDU, I-PDU vs. L-PDU, signal/PDU configuration tables, Com TX modes (periodic / direct / mixed), deadline monitoring (timeout → substitute value), update bits, PduR PDU gateway, Com signal gateway.
 - Read-only theory (no implementation needed for CV): RTE and SWC/runnables, EcuM/BswM, NvM/MemIf, Dcm/UDS basics, E2E protection profiles (CRC + alive counter).
 - Reference: AUTOSAR Classic SWS documents for Can, CanIf, PduR, Com (free on autosar.org) — read only API + config sections.
 
 ### Phase 5 — CV project build (week 6–10)
-See section 2. Final week: README, architecture diagram, demo video/GIF from SavvyCAN, MISRA report.
+See section 2. Final week: README, architecture diagram, demo video/GIF of SavvyCAN decoding the Blue Pill's frames with your DBC, MISRA report.
 
 ---
 
 ## 2. CV project
 
-### Scope update (2026-10-11): MCAL + CAN stack
-The project now also owns the layer below CanIf: a hand-written **AUTOSAR-style MCAL** on the STM32F103 registers, in this order: Port + Dio (GPIO), Mcu (clock tree) + Gpt (hardware timer for the OS tick), Can (bxCAN), and optionally Adc. Every driver uses the SWS API names (`Port_Init`, `Dio_WriteChannel`, `Mcu_InitClock`, `Gpt_StartTimer`, `Can_Write`, ...), takes a `const` configuration struct, reports development errors to Det with the official module IDs, and reaches registers only through base pointers (`bsw/mcal/reg/Mcal_Reg.h`). The firmware binds those pointers to the real addresses (`platform/stm32f103/Mcal_RegMap.c`) and the host tests bind them to RAM (`test/host/stubs/Mcal_FakeRegs.c`), so each driver is unit-tested on a PC.
+### Current scope (2026-10-11): MCAL + DBC with SavvyCAN
+The project has two tracks and nothing else:
 
-In production the MCAL is supplied by the chip vendor (NXP RTD, Infineon MCAL, ST MCAL for SPC5/Stellar) and configured with their tools; no vendor ships one for the F103, so writing it by hand is honest and shows both register-level skill and AUTOSAR layering. CV wording is "AUTOSAR-style MCAL, hand-written at register level", never "AUTOSAR-compliant": it implements a subset of the APIs, has no ARXML configuration and was not conformance-tested.
+1. **MCAL track.** A hand-written **AUTOSAR-style MCAL** on the STM32F103 registers: Port + Dio (GPIO), Mcu (clock tree) + Gpt (hardware timer), Can (bxCAN), a Uart driver that streams frames to SavvyCAN in the LAWICEL/SLCAN text protocol, and optionally Adc. Every driver uses the SWS API names (`Port_Init`, `Dio_WriteChannel`, `Mcu_InitClock`, `Gpt_StartTimer`, `Can_Write`, ...), takes a `const` configuration struct, reports development errors to Det with the official module IDs, and reaches registers only through base pointers (`bsw/mcal/reg/Mcal_Reg.h`). The firmware binds those pointers to the real addresses (`platform/stm32f103/Mcal_RegMap.c`) and the host tests bind them to RAM (`test/host/stubs/Mcal_FakeRegs.c`), so each driver is unit-tested on a PC.
+2. **DBC track.** Reverse-engineer real CAN logs in SavvyCAN and write the result as a DBC file: message periods, alive counters, CRC-8 SAE J1850 and sum checksums, 16-bit physical values, byte order and sign. The DBC is checked against the log with cantools, and later used in SavvyCAN to decode the frames the Blue Pill sends through the Can and Uart drivers.
 
-Guided exercises (the learner writes the code, Claude reviews):
+**Out of scope:** new BSW services (CanIf, PduR, Com, CanTp, Dcm, NvM, ...), RTE and ASW/SWCs. In industry these are configured and generated with tools (Vector DaVinci, EB tresos, ETAS ISOLAR) that a personal project does not have. The MCAL is different: vendors ship it as plain C drivers, and no vendor ships one for the F103, so writing it by hand is both credible and the best way to show register-level skill.
 
-| # | Module | Guide | Host test (CMake option, OFF until done) |
-|---|---|---|---|
-| 1 | Port, Dio | [ex01-port-dio.vi.md](exercises/ex01-port-dio.vi.md) | `test_port_dio` (`MCAL_PORT_DIO_EXERCISE_TESTS`) |
-| 2 | Mcu, Gpt | planned | planned |
-| 3 | Can (bxCAN) | [ex03-can-bxcan.vi.md](exercises/ex03-can-bxcan.vi.md) | `test_can_hw` (`CAN_HW_EXERCISE_TESTS`) |
-| 4 | Adc (optional) | planned | planned |
+**Existing CanIf/PduR/Com code (milestone 2) is frozen.** It stays in the repo, still builds and is still tested in CI, but it is no longer developed and is not part of the CV pitch. It can serve as the upper layer when testing the Can driver.
 
-### Scope decision (2026-10-09): BSW only, no RTE/ASW
-The project implements only the **BSW communication stack**. RTE and application SWCs are dropped on purpose: in industry they are produced by tool chains (Vector DaVinci, EB tresos, ETAS ISOLAR) that a personal project cannot access, so a hand-written "RTE" invites the question "how did you do that without the tools?". A hand-written subset of the Can/CanIf/PduR/Com SWS APIs, configured by a small DBC-to-C generator, is honest, explainable line by line, and is exactly what BSW integration/development roles work on daily.
-
-### Option A (chosen): "AUTOSAR-like BSW CAN communication stack on STM32 (gateway ECU), DBC-driven, verified with log replay"
+CV wording is "AUTOSAR-style MCAL, hand-written at register level", never "AUTOSAR-compliant": the project implements a subset of the APIs, has no ARXML configuration and was not conformance-tested.
 
 One-line pitch for the CV:
-> Hand-wrote an AUTOSAR-style MCAL for STM32F103 at register level (Mcu, Port, Dio, Gpt, Can/bxCAN) with SWS API names, const configuration and Det error reporting, unit-tested on host against fake registers; on top of it, an AUTOSAR Classic–inspired CAN communication stack (CanIf, PduR with PDU gateway, Com with signal gateway, deadline monitoring and periodic TX) configured from DBC by a Python generator; verified by replaying real-vehicle CAN logs and decoding the output in SavvyCAN; MISRA C:2012 oriented, CI on GitHub Actions.
+> Hand-wrote an AUTOSAR-style MCAL for STM32F103 at register level (Mcu, Port, Dio, Gpt, Can/bxCAN, Uart) with SWS API names, const configuration and Det error reporting, unit-tested on host against fake registers with CI on GitHub Actions; reverse-engineered real-vehicle CAN logs in SavvyCAN into a DBC (alive counters, CRC-8 SAE J1850 and sum checksums, verified with cantools) and used it to decode the driver's live traffic streamed to SavvyCAN; MISRA C:2012 oriented.
 
 Architecture:
 
 ```
  PC side                                   STM32F103 (Blue Pill)
- ┌───────────────────────┐   UART 1M   ┌─────────────────────────────────────────┐
- │ replay.py             │────────────▶│ CddUartGw  (log frames in / out)        │
- │  reads .csv/.asc/.log │◀────────────│        │                                │
- │  real timestamps      │             │        ▼                                │
- └───────────────────────┘             │ Can    (MCAL, bxCAN, loopback/normal)   │
-                                       │ Mcu/Port/Dio/Gpt (MCAL, registers)      │
- ┌───────────────────────┐             │ CanIf  (HRH/HTH mapping, RX indication) │
- │ SavvyCAN              │◀── capture ─│ PduR   (routing table, PDU gateway)     │
- │  DBC decode / graphs  │   (UART or  │ Com    (signal pack/unpack, signal      │
- │  verify ECU outputs   │   CANable)  │         gateway, deadline monitoring,   │
- └───────────────────────┘             │         periodic TX)                    │
- ┌───────────────────────┐             │ ComTest (thin hook calling the public   │
- │ dbc2c.py (codegen)    │── *.c/h ──▶ │          Com_ReceiveSignal/SendSignal)  │
- └───────────────────────┘             │ Os     (1 ms SysTick cooperative tasks) │
-                                       │ Det    (dev error tracer → UART)        │
-                                       └─────────────────────────────────────────┘
+ ┌───────────────────────┐  UART (SLCAN) ┌─────────────────────────────────────────┐
+ │ SavvyCAN              │◀──────────────│ app/main.c  (test harness, no RTE/SWC)  │
+ │  LAWICEL connection   │               │        │                                │
+ │  your DBC decodes the │               │        ▼                                │
+ │  frames live          │               │ MCAL                                    │
+ └───────────────────────┘               │  Can   (bxCAN, loopback/normal)         │
+ ┌───────────────────────┐               │  Uart  (SLCAN frame stream)             │
+ │ dbc/*.dbc (yours)     │               │  Port / Dio  (pins, LED)                │
+ │  checked by cantools  │               │  Mcu / Gpt   (72 MHz clock, 1 ms tick)  │
+ │  against real logs    │               │  Adc   (optional)                       │
+ └───────────────────────┘               │ Det    (development error tracer)       │
+                                         └─────────────────────────────────────────┘
 ```
 
-Data flow: a real-car log is replayed with original timing → frames enter the STM32 → `Can` → `CanIf` → `PduR`. PduR either routes a whole PDU to a TX PDU (PDU gateway, e.g. ID translation) or hands it to `Com`. `Com` unpacks signals, applies the **signal gateway** (copy selected input signals into output PDUs defined in **your own output DBC**) and transmits output PDUs periodically → captured in SavvyCAN and decoded with that output DBC. Stop the replay → Com deadline monitoring fires → substitute values + Det report visible in the log. That timeout demo is a strong interview talking point. No application logic is needed: a gateway ECU is a legitimate BSW-only product.
-
-Why this scope:
-- Matches the constraint (log files, no car) while still being real embedded work on your hardware.
-- Every line is yours and explainable; no "fake" RTE pretending to be tool output.
-- The DBC-to-C generator mirrors what configuration tools do (`Com_Cfg.c`, `PduR_Cfg.c`), so you can explain generated code in interviews.
-- Scales: optional add-ons are E2E (CRC8 SAE-J1850 + alive counter) in Com, UDS ReadDataByIdentifier (0x22) via a minimal CanTp/Dcm, a second Blue Pill as a real bus partner.
-
-Repository: `github.com/hi3rdt/can-log-analyzer`. Layout:
+Repository layout (target):
 
 ```
 can-log-analyzer/
 ├── bsw/
-│   ├── include/         Std_Types.h, ComStack_Types.h, Platform_Types.h
+│   ├── include/         Std_Types.h, Platform_Types.h, Can_GeneralTypes.h
 │   ├── mcal/reg/        Mcal_Reg.h (register structs + base pointers)
 │   ├── mcal/port, dio/  Port.c, Dio.c                     (GPIO)
 │   ├── mcal/mcu, gpt/   Mcu.c, Gpt.c                      (clock tree, timer)
 │   ├── mcal/can/        Can.c, Can_Hw.c, Can.h            (bxCAN register-level)
-│   ├── ecual/canif/     CanIf.c, CanIf_Cfg.c
-│   ├── services/pdur/   PduR.c, PduR_Cfg.c
-│   ├── services/com/    Com.c, Com_Cfg.c (generated)
+│   ├── mcal/uart/       Uart.c                            (USART1, SLCAN stream)
 │   ├── services/det/    Det.c
-│   └── os/              Os.c (SysTick scheduler)
-├── cdd/uartgw/          CddUartGw.c (frame bridge to PC)
+│   └── ecual/, services/pdur, services/com   frozen (milestone 2)
+├── dbc/                 DBC files you write from the logs (DBC track)
 ├── platform/stm32f103/  startup, linker script, Mcal_RegMap.c (real addresses)
-├── app/                 main.c + ComTest hook (no RTE, no SWC)
-├── config/              input.dbc, output.dbc, gateway.yaml
-├── tools/               dbc2c.py, replay.py, verify.py (cantools)
-├── test/host/           host unit tests for Com, PduR, CanIf, timeouts
-├── docs/                roadmap, architecture.md, SavvyCAN screenshots
-└── CMakeLists.txt       arm-none-eabi firmware + host test targets
+├── app/                 main.c test harness (no RTE, no SWC)
+├── samples/             demo drive log (GVRET CSV + candump)
+├── tools/               log/DBC helpers (cantools), frozen dbc2c.py
+├── test/host/           host unit tests, fake MCAL registers
+└── docs/                roadmap, SavvyCAN guides, exercises
 ```
 
-Milestones (one PR each):
-1. Repo skeleton: CMake (host tests + arm-none-eabi firmware), STM32F103 startup/linker script, `Std_Types.h`/`ComStack_Types.h`, Det, CI.
-2. Com path on host: `CanIf` → `PduR` → `Com` with `dbc2c.py` generating `Com_Cfg.c` / `PduR_Cfg.c` / `CanIf_Cfg.c`, host unit tests.
-3. MCAL base: register layer, Port + Dio (exercise 1), Mcu + Gpt (exercise 2); `main.c` blinks the LED through `Port_Init` / `Dio_FlipChannel` on a Gpt tick.
-4. `Can` MCAL driver for bxCAN (exercise 3, loopback first) + `CddUartGw`; frames visible on PC.
-5. Os scheduler, Com periodic TX + deadline monitoring, signal gateway; replay a real log, outputs decoded in SavvyCAN.
-6. Bus-off recovery, optional Adc, MISRA check (cppcheck `--addon=misra`), README with diagrams, results, demo GIF.
+Milestones:
+1. Repo skeleton: CMake (host tests + arm-none-eabi firmware), startup/linker script, Det, CI. Done.
+2. CanIf → PduR → Com with `dbc2c.py`. Done, now frozen.
+3. MCAL base: register layer, Port + Dio (exercise M1), Mcu + Gpt (exercise M2); `main.c` blinks the LED through `Port_Init` / `Dio_FlipChannel` on a Gpt tick.
+4. Can driver for bxCAN (exercise M3, loopback first) + Uart SLCAN stream (exercise M4); SavvyCAN shows the Blue Pill's frames live over a LAWICEL connection.
+5. DBC track: a DBC for `GVRET_Log.csv` (exercise D1) and for `0x2F0` in the demo log (SavvyCAN guide, exercise 4), each checked with cantools; the Blue Pill transmits frames described by your DBC and SavvyCAN decodes them.
+6. Bus-off handling, optional Adc, MISRA check (cppcheck `--addon=misra`), README with diagrams, demo GIF.
 
-### Option B (not chosen as main project): "CAN log analyzer & signal reverse-engineering tool"
-C++/Python tool that loads SavvyCAN/candump logs + DBC, decodes signals, detects anomalies (missing periodic frames, counter jumps, bad checksums, bus load), and exports reports. Kept only as a side tool inside Option A (`tools/verify.py`).
+Guided exercises (the learner writes the code and the DBC, Claude reviews):
+
+| # | Track | Topic | Guide | Check |
+|---|---|---|---|---|
+| M1 | MCAL | Port, Dio | [ex01-port-dio.vi.md](exercises/ex01-port-dio.vi.md) | `test_port_dio` (`MCAL_PORT_DIO_EXERCISE_TESTS`) |
+| M2 | MCAL | Mcu, Gpt | planned | planned |
+| M3 | MCAL | Can (bxCAN) | [ex03-can-bxcan.vi.md](exercises/ex03-can-bxcan.vi.md) | `test_can_hw` (`CAN_HW_EXERCISE_TESTS`) |
+| M4 | MCAL | Uart + SLCAN to SavvyCAN | planned | planned |
+| M5 | MCAL | Adc (optional) | planned | planned |
+| D1 | DBC | DBC for `GVRET_Log.csv` | [dbc01-gvret-log.vi.md](exercises/dbc01-gvret-log.vi.md) | cantools + SavvyCAN |
+
+### Scope history
+- 2026-10-09: Option A chosen (CAN gateway ECU on STM32, verified with log replay), narrowed to BSW only (Can, CanIf, PduR, Com, Det), no RTE/ASW. Milestones 1 and 2 were built under this scope.
+- 2026-10-11: MCAL added below the stack ("MCAL + CAN stack").
+- 2026-10-11: narrowed to MCAL + DBC with SavvyCAN, as described above. CanIf/PduR/Com frozen.
+- Option B (a standalone log analyzer tool) was never the main project; its useful parts live on as the DBC track.
 
 ---
 
-## 3. Reference code — Com signal unpack (Intel byte order)
+## 3. Reference code — signal unpack (Intel byte order), the math behind a DBC `SG_` line
 
 ```c
 /* Com_Signal.c - generic Intel (little-endian) signal extraction.
@@ -195,7 +188,7 @@ Edge cases to test: `bitLength` = 1 and 32, signal crossing a byte boundary, DLC
 
 ## 4. Shopping list (optional, cheap)
 - SN65HVD230 transceiver module ×2 (~1 USD each) — needed for any real bus.
-- USB-UART adapter (CP2102/CH340) — needed for Option A.
+- USB-UART adapter (CP2102/CH340) — needed for the Uart SLCAN link to SavvyCAN.
 - Second Blue Pill — acts as a "gateway" or second ECU; lets you leave loopback mode.
 - CANable / candleLight-compatible USB-CAN (~15–25 USD) — lets SavvyCAN sniff the real bus directly (verify the exact device support for your OS in SavvyCAN's connection dialog before buying).
 - 120 Ω termination at both bus ends.
