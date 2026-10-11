@@ -10,7 +10,7 @@ Bài tập chia làm 3 phần, mỗi phần có tiêu chí "xong" rõ ràng. Ph�
 |---|---|---|---|
 | A | `bsw/mcal/can/Can_Hw.c`: các hàm thuần tính toán giá trị thanh ghi | `test/host/test_can_hw.c` (đã viết sẵn, 14 test, ~2 175 check, chạy dưới ASan/UBSan) | `test_can_hw` báo `0 failures` và bạn đổi option CMake sang `ON` |
 | B | `bsw/mcal/can/Can.c`: `Can_Init`, `Can_SetControllerMode`, `Can_Write` (truy cập thanh ghi) | Blue Pill ở chế độ **loopback**, debugger hoặc LED | Gửi một frame, nhận lại đúng ID/DLC/data |
-| C | 3 ISR: TX, RX FIFO0, SCE (lỗi/bus-off) + gọi callback của lớp trên (`CanIf`) | Loopback; `CanIf` đã có từ mốc 2 (đóng băng, chỉ dùng làm lớp gọi phía trên) | Frame gửi bằng `Can_Write` quay về và tới `CanIf_RxIndication` đúng ID, DLC, data |
+| C | 3 ISR: TX, RX FIFO0, SCE (lỗi/bus-off) + gọi callback của lớp trên (`CanIf_Cbk.h`) | Loopback; bạn tự viết hai callback trong `app/` | Frame gửi bằng `Can_Write` quay về và tới `CanIf_RxIndication` đúng ID, DLC, data |
 
 Sau khi `Can` chạy được, bài tiếp theo là M4: driver `Uart` đẩy frame lên PC theo giao thức LAWICEL/SLCAN để SavvyCAN xem trực tiếp, rồi decode bằng DBC bạn viết ở [bài D1](dbc01-gvret-log.vi.md).
 
@@ -79,7 +79,9 @@ API đã khai báo sẵn trong `bsw/mcal/can/Can.h` (`Can_ConfigType`, `Can_Init
 
 Kiểm chứng trên Blue Pill: cấu hình `testMode = CAN_HW_MODE_LOOPBACK` (không cần transceiver, vì ở loopback bxCAN không đọc chân RX), gửi `0x100` với 8 byte bất kỳ, rồi trong debugger xem `RF0R.FMP0 = 1` và `RI0R/RDL0R/RDH0R` đúng như đã gửi. Câu hỏi để bạn tự trả lời: vì sao ở **normal mode** không có transceiver và node khác thì frame không bao giờ gửi xong (gợi ý: ACK slot, rồi xem `TEC` tăng dần).
 
-## Phần C — Ngắt và nối vào `CanIf`
+## Phần C — Ngắt và callback lên lớp trên
+
+Trong AUTOSAR, driver `Can` không biết ai dùng frame: nó chỉ gọi các callback của CanIf (`CanIf_RxIndication`, `CanIf_TxConfirmation`). Project này không có CanIf, nên các callback đó được khai báo trong `bsw/include/CanIf_Cbk.h` và **bạn tự viết phần thân trong `app/`** (ví dụ `app/CanIf_Shim.c`): lưu frame vào một ring buffer `static` để `main` đọc, và sau bài M4 thì đẩy frame đó ra Uart dạng SLCAN. `Can.c` chỉ `#include "CanIf_Cbk.h"` và không phụ thuộc vào gì khác. Đó cũng chính là ranh giới giữa MCAL và lớp ECU Abstraction.
 
 Tên handler đã có trong `platform/stm32f103/startup_stm32f103.c`: `USB_HP_CAN1_TX_IRQHandler` (19), `USB_LP_CAN1_RX0_IRQHandler` (20), `CAN1_SCE_IRQHandler` (22). Trên F103 chúng dùng chung vector với USB, lý do project không dùng USB (roadmap mục 0).
 
@@ -87,7 +89,7 @@ Tên handler đã có trong `platform/stm32f103/startup_stm32f103.c`: `USB_HP_CA
 - **RX0 ISR:** lặp tối đa 3 lần (FIFO sâu 3) khi `FMP0 != 0`: đọc `RI0R`, `RDT0R`, `RDL0R`, `RDH0R` **trước** khi nhả FIFO bằng `RF0R = RFOM0`, rồi gọi `CanIf_RxIndication` với `Hoh = CAN_HRH_FIFO0`. DLC trong `RDT0R` là 4 bit, có thể > 8, nên kẹp lại. Kiểm tra `FOVR0` (mất frame) và báo Det.
 - **SCE ISR:** đọc `ESR`; `BOFF = 1` → ghi nhận bus-off (với `ABOM = 1` phần cứng tự phục hồi sau 128 × 11 bit lặn); xóa `MSR.ERRI` bằng cách ghi 1.
 
-Tiêu chí xong: trong `main.c`, gọi `Can_Write` với một frame `0x100`, frame quay lại qua loopback và `CanIf_RxIndication` nhận đúng ID, DLC và data (đặt breakpoint hoặc so sánh rồi nháy LED bằng `Dio`). `CanIf`/`PduR`/`Com` là code đóng băng của mốc 2: chúng chỉ đóng vai lớp gọi phía trên theo đúng interface AUTOSAR, bạn không cần sửa gì trong đó. Thêm nếu muốn: gọi `Com_SendSignal` cho `VehicleSpeed` và đọc lại bằng `Com_ReceiveSignal` để thấy cả đường đi qua các lớp trên.
+Tiêu chí xong: trong `main.c`, gọi `Can_Write` với một frame `0x100`, frame quay lại qua loopback và `CanIf_RxIndication` trong `app/` nhận đúng ID, DLC và data (đặt breakpoint, hoặc so sánh rồi nháy LED bằng `Dio`). Callback chạy trong ISR, nên chỉ copy frame rồi thoát; việc so sánh làm ở `main`.
 
 ## Checklist review (mình sẽ dùng khi bạn push)
 

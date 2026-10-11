@@ -2,9 +2,9 @@
  * @file    SchM.h
  * @brief   Exclusive areas for BSW modules (minimal BSW Scheduler).
  *
- * Com buffers are written from the CAN RX interrupt (Can -> CanIf -> PduR ->
- * Com_RxIndication) and read from task context (Com_ReceiveSignal), so every
- * access to shared PDU buffers is wrapped in an exclusive area.
+ * Data shared between an interrupt and task context (for example the Can
+ * driver's TX mailbox bookkeeping, written by Can_Write and read by the TX
+ * ISR) is accessed inside an exclusive area.
  *
  * The target implementation masks interrupts (PRIMASK) and supports nesting;
  * the host test build links a stub that only counts enter/exit calls.
@@ -16,8 +16,5 @@
 
 void SchM_Enter_Exclusive(void);
 void SchM_Exit_Exclusive(void);
-
-#define SchM_Enter_Com_EXCLUSIVE_AREA_0()     SchM_Enter_Exclusive()
-#define SchM_Exit_Com_EXCLUSIVE_AREA_0()      SchM_Exit_Exclusive()
 
 #endif /* SCHM_H */

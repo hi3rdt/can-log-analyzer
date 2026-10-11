@@ -2,7 +2,7 @@
  * @file    main.c
  * @brief   Firmware entry point. For now: clock + SysTick bring-up and a
  *          1 Hz heartbeat on PC13 (Blue Pill LED, active low). BSW modules
- *          (Det, CanIf, PduR, Com, Can) are initialised here as they land.
+ *          (Det and the MCAL drivers) are initialised here as they land.
  */
 #include "Std_Types.h"
 #include "Det.h"
