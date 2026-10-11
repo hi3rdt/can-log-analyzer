@@ -1,6 +1,6 @@
 /**
  * @file    test_can_hw.c
- * @brief   Host tests for the pure bxCAN helpers in Can_Hw.c (exercise 1).
+ * @brief   Host tests for the pure bxCAN helpers in Can_Hw.c (MCAL exercise 3).
  *
  * Expected register values were derived by hand from RM0008 section 24.9 and
  * cross-checked against the bit timing examples in docs/roadmap.md. Enable

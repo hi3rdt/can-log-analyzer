@@ -1,6 +1,6 @@
 /**
  * @file    Can_Hw.c
- * @brief   Pure bxCAN helpers (exercise 1, see docs/exercises/ex01-bxcan-driver.vi.md).
+ * @brief   Pure bxCAN helpers (MCAL exercise 3, see docs/exercises/ex03-can-bxcan.vi.md).
  *
  * TODO(hi3rdt): replace every stub body below with your implementation, then
  * build the host tests with -DCAN_HW_EXERCISE_TESTS=ON until test_can_hw

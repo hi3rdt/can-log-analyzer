@@ -12,6 +12,9 @@ set(WARN_FLAGS -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Wstrict-prototype
 # Target-independent BSW sources, built for both firmware and host tests.
 set(BSW_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/bsw/include
+    ${CMAKE_SOURCE_DIR}/bsw/mcal/reg
+    ${CMAKE_SOURCE_DIR}/bsw/mcal/port
+    ${CMAKE_SOURCE_DIR}/bsw/mcal/dio
     ${CMAKE_SOURCE_DIR}/bsw/mcal/can
     ${CMAKE_SOURCE_DIR}/bsw/ecual/canif
     ${CMAKE_SOURCE_DIR}/bsw/services/pdur
@@ -20,6 +23,8 @@ set(BSW_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/gen
 )
 set(BSW_SOURCES
+    ${CMAKE_SOURCE_DIR}/bsw/mcal/port/Port.c
+    ${CMAKE_SOURCE_DIR}/bsw/mcal/dio/Dio.c
     ${CMAKE_SOURCE_DIR}/bsw/mcal/can/Can_Hw.c
     ${CMAKE_SOURCE_DIR}/bsw/ecual/canif/CanIf.c
     ${CMAKE_SOURCE_DIR}/bsw/services/pdur/PduR.c
@@ -44,6 +49,7 @@ if(CMAKE_CROSSCOMPILING)
         ${CMAKE_SOURCE_DIR}/platform/stm32f103/startup_stm32f103.c
         ${CMAKE_SOURCE_DIR}/platform/stm32f103/system_stm32f103.c
         ${CMAKE_SOURCE_DIR}/platform/stm32f103/SchM_CortexM.c
+        ${CMAKE_SOURCE_DIR}/platform/stm32f103/Mcal_RegMap.c
         ${CMAKE_SOURCE_DIR}/app/main.c
     )
     # The vector table stores the initial MSP (a data address) in a function pointer
@@ -72,8 +78,10 @@ else()
     target_compile_options(bsw PRIVATE -O0 -g --coverage -fsanitize=address,undefined)
     target_link_options(bsw PUBLIC --coverage -fsanitize=address,undefined)
 
-    # Host replacements for the CAN driver and the exclusive area
+    # Host replacements for the CAN driver, the exclusive area and the MCAL
+    # registers (RAM-backed fakes instead of the addresses in Mcal_RegMap.c)
     add_library(host_stubs STATIC
+        ${CMAKE_SOURCE_DIR}/test/host/stubs/Mcal_FakeRegs.c
         ${CMAKE_SOURCE_DIR}/test/host/stubs/Can_Stub.c
         ${CMAKE_SOURCE_DIR}/test/host/stubs/SchM_Stub.c
     )
@@ -94,9 +102,15 @@ else()
     add_host_test(test_com_signal)
     add_host_test(test_comstack)
 
-    # Exercise 1 (docs/exercises/ex01-bxcan-driver.vi.md): OFF until Can_Hw.c
-    # is implemented, so CI stays green. Turn the default ON in the PR that
-    # adds the implementation.
+    # Exercise tests are OFF until the learner's implementation lands, so CI
+    # stays green. Turn the default ON in the PR that adds the implementation.
+    # MCAL exercise 1 (docs/exercises/ex01-port-dio.vi.md)
+    option(MCAL_PORT_DIO_EXERCISE_TESTS "Build and run test_port_dio (Port/Dio exercise)" OFF)
+    if(MCAL_PORT_DIO_EXERCISE_TESTS)
+        add_host_test(test_port_dio)
+    endif()
+
+    # MCAL exercise 3 (docs/exercises/ex03-can-bxcan.vi.md)
     option(CAN_HW_EXERCISE_TESTS "Build and run test_can_hw (bxCAN helper exercise)" OFF)
     if(CAN_HW_EXERCISE_TESTS)
         add_host_test(test_can_hw)

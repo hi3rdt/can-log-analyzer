@@ -13,6 +13,10 @@
 #include "Std_Types.h"
 
 /* AUTOSAR module IDs used in this project (from the AUTOSAR BSW module list). */
+#define DET_MODULE_ID_GPT       100U
+#define DET_MODULE_ID_MCU       101U
+#define DET_MODULE_ID_DIO       120U
+#define DET_MODULE_ID_PORT      124U
 #define DET_MODULE_ID_CAN       80U
 #define DET_MODULE_ID_CANIF     60U
 #define DET_MODULE_ID_PDUR      51U

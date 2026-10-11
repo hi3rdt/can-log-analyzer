@@ -1,6 +1,6 @@
-# Learning Roadmap & CV Project — AUTOSAR-style BSW CAN stack on STM32F103
+# Learning Roadmap & CV Project — AUTOSAR-style MCAL + CAN stack on STM32F103
 
-Owner: hi3rdt · Date: 2026-10-09
+Owner: hi3rdt · Date: 2026-10-09 · Updated: 2026-10-11 (MCAL + CAN stack)
 Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (offline)
 
 ---
@@ -34,7 +34,8 @@ Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (
 - Physical = raw × factor + offset; signed signals; min/max; multiplexed signals.
 - Write a host-side C library `CanSig_Unpack/Pack` + unit tests (Unity or CppUTest) on PC, validate against `cantools` (Python) output for the same log.
 
-### Phase 3 — Bare-metal bxCAN driver on STM32 (week 3–5)
+### Phase 3 — Register-level MCAL on STM32: Port/Dio, Mcu/Gpt, then bxCAN (week 3–5)
+- GPIO first (exercise 1): CRL/CRH 4-bit CNF|MODE per pin, IDR/ODR, atomic BSRR, RCC clock gating. Then Mcu (HSE → PLL 72 MHz, flash wait states) and Gpt (TIM2 as a 1 ms tick).
 - Clock tree (HSE 8 MHz → 72 MHz, APB1 = 36 MHz), bit timing for 500 kbit/s: prescaler 4, BS1 = 15, BS2 = 2, SJW = 1 → 36 MHz / 4 / 18 TQ = 500 kbit/s, sample point 16/18 = 88.9%.
 - Init/sleep/normal mode transitions (INRQ/INAK, SLEEP/SLAK), loopback mode for self-test.
 - 3 TX mailboxes, 2 RX FIFOs (3 deep each), 14 filter banks: ID-list vs. mask mode.
@@ -56,13 +57,27 @@ See section 2. Final week: README, architecture diagram, demo video/GIF from Sav
 
 ## 2. CV project
 
+### Scope update (2026-10-11): MCAL + CAN stack
+The project now also owns the layer below CanIf: a hand-written **AUTOSAR-style MCAL** on the STM32F103 registers, in this order: Port + Dio (GPIO), Mcu (clock tree) + Gpt (hardware timer for the OS tick), Can (bxCAN), and optionally Adc. Every driver uses the SWS API names (`Port_Init`, `Dio_WriteChannel`, `Mcu_InitClock`, `Gpt_StartTimer`, `Can_Write`, ...), takes a `const` configuration struct, reports development errors to Det with the official module IDs, and reaches registers only through base pointers (`bsw/mcal/reg/Mcal_Reg.h`). The firmware binds those pointers to the real addresses (`platform/stm32f103/Mcal_RegMap.c`) and the host tests bind them to RAM (`test/host/stubs/Mcal_FakeRegs.c`), so each driver is unit-tested on a PC.
+
+In production the MCAL is supplied by the chip vendor (NXP RTD, Infineon MCAL, ST MCAL for SPC5/Stellar) and configured with their tools; no vendor ships one for the F103, so writing it by hand is honest and shows both register-level skill and AUTOSAR layering. CV wording is "AUTOSAR-style MCAL, hand-written at register level", never "AUTOSAR-compliant": it implements a subset of the APIs, has no ARXML configuration and was not conformance-tested.
+
+Guided exercises (the learner writes the code, Claude reviews):
+
+| # | Module | Guide | Host test (CMake option, OFF until done) |
+|---|---|---|---|
+| 1 | Port, Dio | [ex01-port-dio.vi.md](exercises/ex01-port-dio.vi.md) | `test_port_dio` (`MCAL_PORT_DIO_EXERCISE_TESTS`) |
+| 2 | Mcu, Gpt | planned | planned |
+| 3 | Can (bxCAN) | [ex03-can-bxcan.vi.md](exercises/ex03-can-bxcan.vi.md) | `test_can_hw` (`CAN_HW_EXERCISE_TESTS`) |
+| 4 | Adc (optional) | planned | planned |
+
 ### Scope decision (2026-10-09): BSW only, no RTE/ASW
 The project implements only the **BSW communication stack**. RTE and application SWCs are dropped on purpose: in industry they are produced by tool chains (Vector DaVinci, EB tresos, ETAS ISOLAR) that a personal project cannot access, so a hand-written "RTE" invites the question "how did you do that without the tools?". A hand-written subset of the Can/CanIf/PduR/Com SWS APIs, configured by a small DBC-to-C generator, is honest, explainable line by line, and is exactly what BSW integration/development roles work on daily.
 
 ### Option A (chosen): "AUTOSAR-like BSW CAN communication stack on STM32 (gateway ECU), DBC-driven, verified with log replay"
 
 One-line pitch for the CV:
-> Implemented an AUTOSAR Classic–inspired BSW CAN communication stack on STM32F103 without commercial tooling: register-level bxCAN driver, CanIf, PduR (PDU gateway), Com (signal pack/unpack, signal gateway, deadline monitoring, periodic TX) and Det; configuration generated from DBC by a Python tool; verified by replaying real-vehicle CAN logs and decoding the output in SavvyCAN; MISRA C:2012 oriented, unit-tested on host, CI on GitHub Actions.
+> Hand-wrote an AUTOSAR-style MCAL for STM32F103 at register level (Mcu, Port, Dio, Gpt, Can/bxCAN) with SWS API names, const configuration and Det error reporting, unit-tested on host against fake registers; on top of it, an AUTOSAR Classic–inspired CAN communication stack (CanIf, PduR with PDU gateway, Com with signal gateway, deadline monitoring and periodic TX) configured from DBC by a Python generator; verified by replaying real-vehicle CAN logs and decoding the output in SavvyCAN; MISRA C:2012 oriented, CI on GitHub Actions.
 
 Architecture:
 
@@ -73,6 +88,7 @@ Architecture:
  │  reads .csv/.asc/.log │◀────────────│        │                                │
  │  real timestamps      │             │        ▼                                │
  └───────────────────────┘             │ Can    (MCAL, bxCAN, loopback/normal)   │
+                                       │ Mcu/Port/Dio/Gpt (MCAL, registers)      │
  ┌───────────────────────┐             │ CanIf  (HRH/HTH mapping, RX indication) │
  │ SavvyCAN              │◀── capture ─│ PduR   (routing table, PDU gateway)     │
  │  DBC decode / graphs  │   (UART or  │ Com    (signal pack/unpack, signal      │
@@ -99,14 +115,17 @@ Repository: `github.com/hi3rdt/can-log-analyzer`. Layout:
 can-log-analyzer/
 ├── bsw/
 │   ├── include/         Std_Types.h, ComStack_Types.h, Platform_Types.h
-│   ├── mcal/can/        Can.c, Can.h, Can_Cfg.h           (bxCAN register-level)
+│   ├── mcal/reg/        Mcal_Reg.h (register structs + base pointers)
+│   ├── mcal/port, dio/  Port.c, Dio.c                     (GPIO)
+│   ├── mcal/mcu, gpt/   Mcu.c, Gpt.c                      (clock tree, timer)
+│   ├── mcal/can/        Can.c, Can_Hw.c, Can.h            (bxCAN register-level)
 │   ├── ecual/canif/     CanIf.c, CanIf_Cfg.c
 │   ├── services/pdur/   PduR.c, PduR_Cfg.c
 │   ├── services/com/    Com.c, Com_Cfg.c (generated)
 │   ├── services/det/    Det.c
 │   └── os/              Os.c (SysTick scheduler)
 ├── cdd/uartgw/          CddUartGw.c (frame bridge to PC)
-├── platform/stm32f103/  startup, linker script, register definitions
+├── platform/stm32f103/  startup, linker script, Mcal_RegMap.c (real addresses)
 ├── app/                 main.c + ComTest hook (no RTE, no SWC)
 ├── config/              input.dbc, output.dbc, gateway.yaml
 ├── tools/               dbc2c.py, replay.py, verify.py (cantools)
@@ -118,9 +137,10 @@ can-log-analyzer/
 Milestones (one PR each):
 1. Repo skeleton: CMake (host tests + arm-none-eabi firmware), STM32F103 startup/linker script, `Std_Types.h`/`ComStack_Types.h`, Det, CI.
 2. Com path on host: `CanIf` → `PduR` → `Com` with `dbc2c.py` generating `Com_Cfg.c` / `PduR_Cfg.c` / `CanIf_Cfg.c`, host unit tests.
-3. `Can` bxCAN driver (loopback first) + `CddUartGw`; frames visible on PC.
-4. Os scheduler, Com periodic TX + deadline monitoring, signal gateway; replay a real log, outputs decoded in SavvyCAN.
-5. Bus-off recovery, MISRA check (cppcheck `--addon=misra`), README with diagrams, results, demo GIF.
+3. MCAL base: register layer, Port + Dio (exercise 1), Mcu + Gpt (exercise 2); `main.c` blinks the LED through `Port_Init` / `Dio_FlipChannel` on a Gpt tick.
+4. `Can` MCAL driver for bxCAN (exercise 3, loopback first) + `CddUartGw`; frames visible on PC.
+5. Os scheduler, Com periodic TX + deadline monitoring, signal gateway; replay a real log, outputs decoded in SavvyCAN.
+6. Bus-off recovery, optional Adc, MISRA check (cppcheck `--addon=misra`), README with diagrams, results, demo GIF.
 
 ### Option B (not chosen as main project): "CAN log analyzer & signal reverse-engineering tool"
 C++/Python tool that loads SavvyCAN/candump logs + DBC, decodes signals, detects anomalies (missing periodic frames, counter jumps, bad checksums, bus load), and exports reports. Kept only as a side tool inside Option A (`tools/verify.py`).
