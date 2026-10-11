@@ -2,7 +2,7 @@
  * @file    Can_Hw.h
  * @brief   Pure bxCAN helper functions (no register access).
  *
- * Exercise 1 (docs/exercises/ex01-bxcan-driver.vi.md): implement these in
+ * MCAL exercise 3 (docs/exercises/ex03-can-bxcan.vi.md): implement these in
  * Can_Hw.c. They compute register *values*; Can.c writes them to the bxCAN
  * registers. Keeping the bit fiddling out of Can.c means it can be unit-tested
  * on the host (test/host/test_can_hw.c) before it ever runs on the Blue Pill.

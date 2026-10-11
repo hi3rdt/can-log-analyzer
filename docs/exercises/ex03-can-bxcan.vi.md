@@ -1,4 +1,6 @@
-# Bài tập 1 — Driver bxCAN (mốc 3, phần `Can`)
+# Bài tập MCAL 3 — Driver `Can` (bxCAN)
+
+> Thứ tự bài MCAL: [1 Port/Dio](ex01-port-dio.vi.md) → 2 Mcu + Gpt (sắp có) → **3 Can** → 4 Adc (tùy chọn). Phần A của bài này là hàm thuần nên làm song song với bài 1 được; phần B và C dùng `Port` (bài 1) để cấu hình chân PB8/PB9 và `Mcu` (bài 2) để biết tần số PCLK1.
 
 Người học: hi3rdt · Bạn tự viết code, mình review · Tài liệu chính: **RM0008** (STM32F10x Reference Manual) chương 24 "Controller area network (bxCAN)"
 
@@ -10,7 +12,7 @@ Bài tập chia làm 3 phần, mỗi phần có tiêu chí "xong" rõ ràng. Ph�
 | B | `bsw/mcal/can/Can.c`: `Can_Init`, `Can_SetControllerMode`, `Can_Write` (truy cập thanh ghi) | Blue Pill ở chế độ **loopback**, debugger hoặc LED | Gửi một frame, nhận lại đúng ID/DLC/data |
 | C | 3 ISR: TX, RX FIFO0, SCE (lỗi/bus-off) + nối vào `CanIf` | Loopback + `CanIf_RxIndication` → `PduR` → `Com` đã có từ PR #3 | Frame `VehicleSpeed` gửi đi quay về và `Com_ReceiveSignal` đọc đúng giá trị |
 
-Bài tập 2 (sau bài này) là `CddUartGw`: đưa frame lên PC qua UART theo định dạng SavvyCAN đọc được.
+Sau khi `Can` chạy được, bước tiếp theo trong roadmap là `CddUartGw`: đưa frame lên PC qua UART theo định dạng SavvyCAN đọc được.
 
 ## Vì sao tách `Can_Hw.c` khỏi `Can.c`
 
@@ -41,7 +43,7 @@ Tự kiểm tra trước khi chạy test: 36 MHz, 500 kbit/s, 87,5 % phải ra p
 
 ## Phần B — Trình tự thanh ghi (`Can.c`)
 
-API đã khai báo sẵn trong `bsw/mcal/can/Can.h` (`Can_ConfigType`, `Can_Init`, `Can_SetControllerMode`, `Can_Write`, `Can_MainFunction_BusOff`). Bạn tự thêm các define thanh ghi CAN và AFIO vào `platform/stm32f103/stm32f103_regs.h`, theo cùng kiểu `REG32(...)` đang có. Đối chiếu từng offset với RM0008 mục 24.9.5 "bxCAN register map" thay vì tin bảng dưới đây.
+API đã khai báo sẵn trong `bsw/mcal/can/Can.h` (`Can_ConfigType`, `Can_Init`, `Can_SetControllerMode`, `Can_Write`, `Can_MainFunction_BusOff`). Theo cùng cách đã làm ở bài 1, bạn tự thêm `Mcal_CanRegType` (và `Mcal_AfioRegType`) vào `bsw/mcal/reg/Mcal_Reg.h`, một con trỏ base `Mcal_CanBase` với địa chỉ thật trong `platform/stm32f103/Mcal_RegMap.c` và bản fake trong `test/host/stubs/Mcal_FakeRegs.c`, để `Can.c` cũng test được trên PC. Đối chiếu từng offset với RM0008 mục 24.9.5 "bxCAN register map" thay vì tin bảng dưới đây.
 
 | Thanh ghi | Offset từ `CAN1` = `0x4000 6400` | Bit cần dùng |
 |---|---|---|
@@ -58,12 +60,12 @@ API đã khai báo sẵn trong `bsw/mcal/can/Can.h` (`Can_ConfigType`, `Can_Init
 
 `Can_Init` nên làm theo thứ tự:
 
-1. Bật clock: `RCC_APB1ENR.CANEN`, `RCC_APB2ENR.AFIOEN | IOPBEN`.
+1. Bật clock: `RCC_APB1ENR.CANEN` và `RCC_APB2ENR.AFIOEN`. Clock `IOPBEN` đã do `Port_Init` bật.
 2. Remap CAN sang PB8/PB9: `AFIO_MAPR` (`0x4001 0004`) bit 14:13 = `0b10`. Bẫy: bit `SWJ_CFG` 26:24 là write-only và đọc về luôn 0, nên read-modify-write có thể ghi đè cấu hình SWD; hỏi bản thân xem có ảnh hưởng không.
-3. GPIO trong `GPIOB_CRH`: PB8 = input pull-up (`CNF=10, MODE=00`, và `ODR8 = 1`), PB9 = alternate function push-pull 50 MHz (`CNF=10, MODE=11`).
+3. GPIO **không** cấu hình trong `Can.c`: trong AUTOSAR, chân là việc của `Port`. Bảng `Port_ConfigType` của board phải có PB8 = `PORT_MODE_INPUT_PULLUP` và PB9 = `PORT_MODE_ALT_PP` 50 MHz (đúng như test của bài 1), và `Port_Init` chạy trước `Can_Init`.
 4. Thoát sleep, vào init: xóa `SLEEP`, set `INRQ`, chờ `INAK = 1` và `SLAK = 0`. **Mọi vòng chờ phải có timeout** (dùng `System_GetTickMs()`), hết hạn thì báo `Det_ReportError(DET_MODULE_ID_CAN, ...)` và trả lỗi.
 5. Cấu hình `MCR`: `ABOM = 1` (tự phục hồi bus-off), `TXFP` tùy bạn chọn và **ghi lý do vào comment** (gợi ý: ảnh hưởng thế nào đến thứ tự frame khi 3 mailbox đều đầy và `Can_Hw_FindFreeMailbox` luôn chọn mailbox thấp nhất?).
-6. `CAN_BTR = Can_Hw_BuildBtr(...)` từ `Can_Hw_CalcBitTiming(PCLK1_HZ, Config->bitrate, Config->samplePointPermille, ...)`.
+6. `CAN_BTR = Can_Hw_BuildBtr(...)` từ `Can_Hw_CalcBitTiming(PCLK1_HZ, Config->bitrate, Config->samplePointPermille, ...)`. Sau bài 2, `PCLK1_HZ` lấy từ cấu hình `Mcu` thay vì hằng số.
 7. Filter: `FMR.FINIT = 1` → với mỗi filter: mask mode, 32-bit, gán FIFO0, ghi `FiR1/FiR2`, active → `FINIT = 0`. `filters == NULL_PTR` thì cấu hình bank 0 nhận mọi frame (id 0, mask 0, cả chuẩn lẫn extended cần 2 bank vì bit `IDE` luôn được so).
 8. Ngắt: `IER = TMEIE | FMPIE0 | ERRIE | BOFIE`, enable IRQ 19, 20, 22 trong `NVIC_ISER0` (`0xE000 E100`).
 9. Để controller ở `CAN_CS_STOPPED`. `Can_SetControllerMode(STARTED)` xóa `INRQ` và chờ `INAK = 0`.
@@ -89,7 +91,7 @@ Tiêu chí xong: trong `main.c`, gọi `Com_SendSignal` cho `VehicleSpeed`, fram
 
 ## Checklist review (mình sẽ dùng khi bạn push)
 
-- **MISRA C:2012:** hằng số có hậu tố `U`/`UL`; không trộn kiểu có dấu và không dấu; một điểm `return` mỗi hàm (Rule 15.5, advisory, project đang theo); mọi `if/else if` có `else`; ép kiểu con trỏ sang `volatile` chỉ nằm trong `stm32f103_regs.h` (Rule 11.4, đã có ghi chú deviation).
+- **MISRA C:2012:** hằng số có hậu tố `U`/`UL`; không trộn kiểu có dấu và không dấu; một điểm `return` mỗi hàm (Rule 15.5, advisory, project đang theo); mọi `if/else if` có `else`; ép số nguyên sang con trỏ thanh ghi chỉ nằm trong `platform/stm32f103/` (Rule 11.4, đã có ghi chú deviation).
 - **ISR:** ngắn, không vòng chờ, không gọi hàm có thể block; biến dùng chung giữa ISR và task là `volatile` và được bảo vệ bằng exclusive area ở phía task.
 - **Thanh ghi:** không read-modify-write trên thanh ghi rc_w1 (`TSR`, `RF0R`, `MSR`); `BTR` chỉ ghi trong init mode; `TXRQ` là lệnh ghi cuối cùng vào mailbox.
 - **Lỗi:** mọi vòng chờ có timeout; mọi lỗi phát triển đi qua `Det_ReportError(DET_MODULE_ID_CAN, ...)`.
@@ -97,6 +99,6 @@ Tiêu chí xong: trong `main.c`, gọi `Com_SendSignal` cho `VehicleSpeed`, fram
 
 ## Cách nộp
 
-1. Tạo nhánh, ví dụ `ex01-can-hw`, commit phần A (kèm đổi option CMake sang `ON`), push và mở PR vào `master` (sau khi các PR đang mở đã được merge).
-2. Nhắn trong thread "review ex01" kèm link PR. Mình review theo checklist trên, comment trực tiếp vào dòng code, và không sửa code thay bạn trừ khi bạn yêu cầu.
+1. Tạo nhánh, ví dụ `ex03-can-hw`, commit phần A (kèm đổi option CMake sang `ON`), push và mở PR vào `master` (sau khi các PR đang mở đã được merge).
+2. Nhắn trong thread "review ex03" kèm link PR. Mình review theo checklist trên, comment trực tiếp vào dòng code, và không sửa code thay bạn trừ khi bạn yêu cầu.
 3. Phần B và C có thể nộp chung một PR sau khi đã chạy được trên Blue Pill.

@@ -1,10 +1,13 @@
 # can-log-analyzer
 
-An AUTOSAR Classic–inspired **BSW CAN communication stack** for the STM32F103C8T6 (Blue Pill, bxCAN), written without commercial AUTOSAR tooling and verified with **offline CAN log files** that are compatible with [SavvyCAN](https://www.savvycan.com/) instead of a real vehicle.
+An **AUTOSAR-style MCAL, hand-written at register level**, plus an AUTOSAR Classic–inspired **CAN communication stack** on top of it, for the STM32F103C8T6 (Blue Pill, bxCAN). Written without commercial AUTOSAR tooling and verified with **offline CAN log files** that are compatible with [SavvyCAN](https://www.savvycan.com/) instead of a real vehicle.
 
 ## Scope
 
-Only the Basic Software (BSW) communication path is implemented: `Can` → `CanIf` → `PduR` → `Com`, plus `Det`. RTE and application SWCs are intentionally out of scope, because in production they come from configuration tools (DaVinci, EB tresos, ISOLAR). The ECU acts as a **CAN gateway**: PDU routing in PduR and signal routing in Com, with deadline monitoring and periodic transmission. The public Com API (`Com_ReceiveSignal` / `Com_SendSignal`) is the upper boundary.
+Only Basic Software (BSW) is implemented, in two parts:
+
+- **MCAL** on the STM32F103 registers: `Port`, `Dio`, `Mcu`, `Gpt`, `Can` (bxCAN) and optionally `Adc`. The drivers use the AUTOSAR SWS API names, take `const` configuration structs, report development errors to `Det`, and access hardware only through register base pointers (`bsw/mcal/reg/Mcal_Reg.h`). The firmware binds those pointers to the real addresses; the host tests bind them to RAM, so every driver is unit-tested on a PC. In production the MCAL comes from the chip vendor; none exists for the F103, which is why it is written here by hand. It is "AUTOSAR-style", not AUTOSAR-compliant: a subset of the APIs, no ARXML configuration, no conformance tests.
+- **CAN communication stack**: `Can` → `CanIf` → `PduR` → `Com`, plus `Det`. RTE and application SWCs are intentionally out of scope, because in production they come from configuration tools (DaVinci, EB tresos, ISOLAR). The ECU acts as a **CAN gateway**: PDU routing in PduR and signal routing in Com, with deadline monitoring and periodic transmission. The public Com API (`Com_ReceiveSignal` / `Com_SendSignal`) is the upper boundary.
 
 Configuration tables (`*_Cfg.c`) are generated from DBC files by a small Python tool (`tools/dbc2c.py`), mirroring what a configuration tool does.
 
@@ -56,7 +59,10 @@ No vehicle is required: bring-up uses bxCAN loopback mode plus log replay.
 
 ```
 bsw/include/           Std_Types.h, Platform_Types.h, ComStack_Types.h, Can_GeneralTypes.h, SchM.h
-bsw/mcal/can/          Can driver interface + Can_Hw pure register-value helpers (exercise 1)
+bsw/mcal/reg/          Mcal_Reg.h: GPIO/RCC register structs and base pointers used by every MCAL driver
+bsw/mcal/port/         Port driver: pin mode, clock gating, initial levels (MCAL exercise 1)
+bsw/mcal/dio/          Dio driver: channel/port read and atomic BSRR writes (MCAL exercise 1)
+bsw/mcal/can/          Can driver interface + Can_Hw pure register-value helpers (MCAL exercise 3)
 bsw/ecual/canif/       CAN Interface: software filter, DLC check, ID <-> PDU mapping
 bsw/services/pdur/     PDU Router: Com/CanIf routing, PDU gateway
 bsw/services/com/      COM: signal pack/unpack (Intel/Motorola, signed), I-PDU send
@@ -64,15 +70,15 @@ bsw/services/det/      Default Error Tracer
 config/                Bus DBC and gateway routes (input of the generator)
 gen/                   Generated CanIf/PduR/Com configuration (do not edit)
 tools/                 dbc2c.py generator, cantools test-vector generator, demo log generator, tests
-platform/stm32f103/    Startup code, linker script, register map, clock/SysTick setup
+platform/stm32f103/    Startup code, linker script, register map, Mcal_RegMap.c (real MCAL base addresses), clock/SysTick setup
 app/                   main.c (init sequence, main loop)
 cmake/                 arm-none-eabi toolchain file
-test/host/             Host unit tests (plain C, run with CTest)
+test/host/             Host unit tests (plain C, run with CTest); stubs/ has fake MCAL registers
 samples/               30 s demo drive log (GVRET CSV + candump) generated from config/gateway.dbc
 docs/                  Roadmap, SavvyCAN hands-on guide, guided exercises (docs/exercises/)
 ```
 
-Planned modules (bxCAN driver, `cdd/uartgw`, Os scheduler) are listed in [docs/roadmap.md](docs/roadmap.md#2-cv-project).
+Planned modules (`Mcu`, `Gpt`, bxCAN `Can.c`, optional `Adc`, `cdd/uartgw`, Os scheduler) are listed in [docs/roadmap.md](docs/roadmap.md#2-cv-project).
 
 ## Build
 
@@ -85,6 +91,8 @@ cmake -S . -B build-host
 cmake --build build-host
 ctest --test-dir build-host --output-on-failure
 ```
+
+The guided exercises in `docs/exercises/` ship header contracts, stub sources and host tests that are switched off until the implementation lands (`-DMCAL_PORT_DIO_EXERCISE_TESTS=ON`, `-DCAN_HW_EXERCISE_TESTS=ON`).
 
 Firmware (GNU Arm toolchain, `arm-none-eabi-gcc`):
 
@@ -100,16 +108,17 @@ The current firmware brings up the 72 MHz clock tree and blinks the PC13 LED at 
 ## Coding rules
 
 - C99, static allocation only, fixed-width AUTOSAR types, configuration in `const` tables.
-- MISRA C:2012 oriented; deviations (register access, vector table) are confined to `platform/` and commented where they occur.
+- MISRA C:2012 oriented; deviations (integer-to-pointer casts for register addresses, vector table) are confined to `platform/` and commented where they occur. MCAL drivers never use a hard-coded address.
 - Warnings are errors (`-Wall -Wextra -Wpedantic -Wconversion -Wshadow`).
 
 ## Status
 
 - [x] Milestone 1: repo skeleton, toolchain, startup code, Det, host test setup, CI
 - [x] Milestone 2: CanIf → PduR → Com with `dbc2c.py` configuration generator
-- [ ] Milestone 3: bxCAN driver (loopback) + UART frame gateway
-- [ ] Milestone 4: Os scheduler, periodic TX, deadline monitoring, signal gateway, log replay
-- [ ] Milestone 5: bus-off recovery, MISRA report, demo
+- [ ] Milestone 3: MCAL base: register layer, Port + Dio, Mcu + Gpt
+- [ ] Milestone 4: Can MCAL driver for bxCAN (loopback) + UART frame gateway
+- [ ] Milestone 5: Os scheduler, periodic TX, deadline monitoring, signal gateway, log replay
+- [ ] Milestone 6: bus-off recovery, optional Adc, MISRA report, demo
 
 ## License
 

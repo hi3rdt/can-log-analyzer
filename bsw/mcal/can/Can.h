@@ -2,7 +2,7 @@
  * @file    Can.h
  * @brief   CAN driver interface (SWS_Can subset). Host tests link a recording
  *          stub (test/host/stubs/Can_Stub.c); the bxCAN implementation in
- *          Can.c is exercise 1 part B (docs/exercises/ex01-bxcan-driver.vi.md).
+ *          Can.c is MCAL exercise 3 part B (docs/exercises/ex03-can-bxcan.vi.md).
  */
 #ifndef CAN_H
 #define CAN_H
