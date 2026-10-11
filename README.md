@@ -9,45 +9,7 @@ Two tracks, nothing else:
 - **MCAL** on the STM32F103 registers: `Port`, `Dio`, `Mcu`, `Gpt`, `Can` (bxCAN), a `Uart` driver that streams frames to SavvyCAN (LAWICEL/SLCAN), and optionally `Adc`. The drivers use the AUTOSAR SWS API names, take `const` configuration structs, report development errors to `Det`, and access hardware only through register base pointers (`bsw/mcal/reg/Mcal_Reg.h`). The firmware binds those pointers to the real addresses; the host tests bind them to RAM, so every driver is unit-tested on a PC. In production the MCAL comes from the chip vendor; none exists for the F103, which is why it is written here by hand. It is "AUTOSAR-style", not AUTOSAR-compliant: a subset of the APIs, no ARXML configuration, no conformance tests.
 - **DBC**: real-vehicle logs are reverse-engineered in SavvyCAN (periods, alive counters, CRC-8 SAE J1850 and sum checksums, physical values) and written down as DBC files in `dbc/`, checked against the log with `tools/check_dbc.py` (cantools). The same DBC later decodes the frames the Blue Pill streams to SavvyCAN.
 
-Out of scope: new BSW services (CanIf, PduR, Com, CanTp, Dcm, ...), RTE and application SWCs, because in production they are configured and generated with tools (DaVinci, EB tresos, ISOLAR) that this project does not have.
-
-## Frozen: CAN communication stack (milestone 2)
-
-The `Can` → `CanIf` → `PduR` → `Com` path below was built before the scope was narrowed. It stays in the repository, still builds and is still tested in CI, but it is no longer developed. `CanIf` serves as the upper layer when testing the `Can` driver.
-
-### Data flow
-
-```
- CAN frame --> Can (ISR) --> CanIf_RxIndication --> PduR_CanIfRxIndication --+--> Com_RxIndication (copy bytes)
-                             software filter,       routing table, 1:n       |       |
-                             DLC check                                       |       v
-                                                                             |   Com_ReceiveSignal (task: unpack, sign-extend)
-                                                                             |
-                                                                             +--> CanIf_Transmit (PDU gateway, new CAN ID)
-
- Com_SendSignal (pack) --> Com_TriggerIPDUSend --> PduR_ComTransmit --> CanIf_Transmit --> Can_Write
-```
-
-### Configuration from DBC
-
-`config/gateway.dbc` describes the bus, `config/routes.json` names the ECU node and the PDU gateway routes:
-
-```sh
-python3 tools/dbc2c.py --dbc config/gateway.dbc --routes config/routes.json --out gen
-```
-
-For node `GW` this creates:
-
-- Com RX I-PDUs for every message that has a signal received by `GW`, and Com TX I-PDUs for every message `GW` transmits.
-- CanIf RX entries sorted by CAN ID (binary search), with a DLC check, plus CanIf TX entries.
-- PduR routes. A PDU gateway target is a pure CanIf L-PDU, not a Com I-PDU.
-- Symbolic handles such as `ComConf_ComSignal_EngineRpm` and `ComConf_ComIPdu_GW_VehicleState`.
-
-The generator rejects overlapping signals, signals outside the DLC, multiplexed signals, CAN FD and signals wider than 32 bits. The generated files in `gen/` are committed so they can be reviewed, and CI fails if they are out of date.
-
-### Verification against cantools
-
-`tools/gen_test_vectors.py` uses [cantools](https://github.com/cantools/cantools) as an independent DBC implementation. It decodes random frames and encodes random signal values, and `test/host/test_comstack.c` checks that the C stack produces the same raw values and bytes for every signal. That covers Intel and Motorola byte order, signed and unsigned signals, and standard and extended IDs.
+Out of scope: BSW services (CanIf, PduR, Com, CanTp, Dcm, ...), RTE and application SWCs, because in production they are configured and generated with tools (DaVinci, EB tresos, ISOLAR) that this project does not have.
 
 ## DBC track
 
@@ -71,19 +33,15 @@ No vehicle is required: bring-up uses bxCAN loopback mode, and SavvyCAN reads th
 ## Repository layout
 
 ```
-bsw/include/           Std_Types.h, Platform_Types.h, ComStack_Types.h, Can_GeneralTypes.h, SchM.h
+bsw/include/           Std_Types.h, Platform_Types.h, ComStack_Types.h, Can_GeneralTypes.h, CanIf_Cbk.h (callbacks the Can driver calls), SchM.h
 bsw/mcal/reg/          Mcal_Reg.h: GPIO/RCC register structs and base pointers used by every MCAL driver
 bsw/mcal/port/         Port driver: pin mode, clock gating, initial levels (MCAL exercise 1)
 bsw/mcal/dio/          Dio driver: channel/port read and atomic BSRR writes (MCAL exercise 1)
 bsw/mcal/can/          Can driver interface + Can_Hw pure register-value helpers (MCAL exercise 3)
-bsw/ecual/canif/       CAN Interface (frozen): software filter, DLC check, ID <-> PDU mapping
-bsw/services/pdur/     PDU Router (frozen): Com/CanIf routing, PDU gateway
-bsw/services/com/      COM (frozen): signal pack/unpack (Intel/Motorola, signed), I-PDU send
 bsw/services/det/      Default Error Tracer
-config/                Bus DBC and gateway routes (input of the frozen generator)
+config/                gateway.dbc: the DBC the demo log is generated from
 dbc/                   DBC files reverse-engineered from logs (DBC track, added by the exercises)
-gen/                   Generated CanIf/PduR/Com configuration (do not edit)
-tools/                 check_dbc.py (DBC vs. log), demo log generator, frozen dbc2c.py and test-vector generator, tests
+tools/                 check_dbc.py (DBC vs. log), demo log generator, tests
 platform/stm32f103/    Startup code, linker script, register map, Mcal_RegMap.c (real MCAL base addresses), clock/SysTick setup
 app/                   main.c (init sequence, main loop)
 cmake/                 arm-none-eabi toolchain file
@@ -96,7 +54,7 @@ Planned modules (`Mcu`, `Gpt`, bxCAN `Can.c`, `Uart`, optional `Adc`) are listed
 
 ## Build
 
-Host unit tests (gcc, AddressSanitizer + UBSan) and generator tests:
+Host unit tests (gcc, AddressSanitizer + UBSan) and tool tests:
 
 ```sh
 pip install -r tools/requirements.txt
@@ -128,7 +86,7 @@ The current firmware brings up the 72 MHz clock tree and blinks the PC13 LED at 
 ## Status
 
 - [x] Milestone 1: repo skeleton, toolchain, startup code, Det, host test setup, CI
-- [x] Milestone 2: CanIf → PduR → Com with `dbc2c.py` configuration generator (now frozen)
+- [x] Milestone 2: CanIf → PduR → Com with a DBC-to-C generator (removed on 2026-10-11 when the scope was narrowed; see git history)
 - [ ] Milestone 3: MCAL base: register layer, Port + Dio, Mcu + Gpt
 - [ ] Milestone 4: Can driver for bxCAN (loopback) + Uart SLCAN stream to SavvyCAN
 - [ ] Milestone 5: DBC track: DBC for real logs checked with cantools; Blue Pill frames decoded in SavvyCAN

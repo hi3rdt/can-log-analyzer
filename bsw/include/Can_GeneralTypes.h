@@ -1,6 +1,6 @@
 /**
  * @file    Can_GeneralTypes.h
- * @brief   Types shared by Can, CanIf and CanTrcv (SWS_CANGeneralTypes subset).
+ * @brief   Types shared by Can and its upper layer (SWS_CANGeneralTypes subset).
  */
 #ifndef CAN_GENERALTYPES_H
 #define CAN_GENERALTYPES_H
@@ -31,10 +31,10 @@ typedef struct
     uint8            ControllerId;
 } Can_HwType;
 
-/** L-PDU handed from CanIf to Can_Write. */
+/** L-PDU handed to Can_Write by the upper layer. */
 typedef struct
 {
-    PduIdType   swPduHandle;    /* CanIf TX L-PDU id, returned in TxConfirmation */
+    PduIdType   swPduHandle;    /* caller's TX id, returned in CanIf_TxConfirmation */
     uint8       length;         /* DLC 0..8 */
     Can_IdType  id;
     uint8      *sdu;

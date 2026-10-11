@@ -45,9 +45,9 @@ Hardware: STM32F103C8T6 (Blue Pill, bxCAN) · Tooling: SavvyCAN, CAN log files (
 - Deliverable: STM32 in loopback receives its own frames; SavvyCAN shows them live and decodes them with your DBC.
 
 ### Phase 4 — AUTOSAR concepts mapped onto your code (week 4–6, overlaps)
-- Layered architecture: MCAL → ECU Abstraction → Services → RTE → SWC. Know all layers, **implement only the MCAL** (section 2). The CanIf/PduR/Com code from milestone 2 stays in the repo, frozen, as a worked example of the layers above.
-- Communication stack path: `Can` → `CanIf` → `PduR` → `Com` → (RTE → SWC in a real ECU). In this project the Com public API (`Com_ReceiveSignal` / `Com_SendSignal`) is the upper boundary.
-- Concepts the frozen milestone 2 code already shows (simplified): PDU, I-PDU vs. L-PDU, signal/PDU configuration tables, Com TX modes (periodic / direct / mixed), deadline monitoring (timeout → substitute value), update bits, PduR PDU gateway, Com signal gateway.
+- Layered architecture: MCAL → ECU Abstraction → Services → RTE → SWC. Know all layers, **implement only the MCAL** (section 2). The upper layers are studied, not built: the Can driver stops at the `CanIf_Cbk.h` callbacks, which a small test harness in `app/` implements.
+- Communication stack path in a real ECU: `Can` → `CanIf` → `PduR` → `Com` → RTE → SWC. In this project the boundary is the Can driver's callbacks (`CanIf_Cbk.h`).
+- Concepts to understand for interviews (not implemented): PDU, I-PDU vs. L-PDU, signal/PDU configuration tables, Com TX modes (periodic / direct / mixed), deadline monitoring (timeout → substitute value), update bits, PduR PDU gateway, Com signal gateway. Milestone 2 implemented a simplified version of these; it is in the git history (removed 2026-10-11).
 - Read-only theory (no implementation needed for CV): RTE and SWC/runnables, EcuM/BswM, NvM/MemIf, Dcm/UDS basics, E2E protection profiles (CRC + alive counter).
 - Reference: AUTOSAR Classic SWS documents for Can, CanIf, PduR, Com (free on autosar.org) — read only API + config sections.
 
@@ -66,7 +66,7 @@ The project has two tracks and nothing else:
 
 **Out of scope:** new BSW services (CanIf, PduR, Com, CanTp, Dcm, NvM, ...), RTE and ASW/SWCs. In industry these are configured and generated with tools (Vector DaVinci, EB tresos, ETAS ISOLAR) that a personal project does not have. The MCAL is different: vendors ship it as plain C drivers, and no vendor ships one for the F103, so writing it by hand is both credible and the best way to show register-level skill.
 
-**Existing CanIf/PduR/Com code (milestone 2) is frozen.** It stays in the repo, still builds and is still tested in CI, but it is no longer developed and is not part of the CV pitch. It can serve as the upper layer when testing the Can driver.
+**The CanIf/PduR/Com code of milestone 2 was removed (2026-10-11)**, together with its generated configuration and the `dbc2c.py` generator; it remains in the git history. The Can driver's only upward dependency is `bsw/include/CanIf_Cbk.h` (`CanIf_RxIndication`, `CanIf_TxConfirmation`), implemented by the test harness in `app/`.
 
 CV wording is "AUTOSAR-style MCAL, hand-written at register level", never "AUTOSAR-compliant": the project implements a subset of the APIs, has no ARXML configuration and was not conformance-tested.
 
@@ -96,26 +96,25 @@ Repository layout (target):
 ```
 can-log-analyzer/
 ├── bsw/
-│   ├── include/         Std_Types.h, Platform_Types.h, Can_GeneralTypes.h
+│   ├── include/         Std_Types.h, Can_GeneralTypes.h, CanIf_Cbk.h (callbacks, implemented in app/)
 │   ├── mcal/reg/        Mcal_Reg.h (register structs + base pointers)
 │   ├── mcal/port, dio/  Port.c, Dio.c                     (GPIO)
 │   ├── mcal/mcu, gpt/   Mcu.c, Gpt.c                      (clock tree, timer)
 │   ├── mcal/can/        Can.c, Can_Hw.c, Can.h            (bxCAN register-level)
 │   ├── mcal/uart/       Uart.c                            (USART1, SLCAN stream)
-│   ├── services/det/    Det.c
-│   └── ecual/, services/pdur, services/com   frozen (milestone 2)
+│   └── services/det/    Det.c
 ├── dbc/                 DBC files you write from the logs (DBC track)
 ├── platform/stm32f103/  startup, linker script, Mcal_RegMap.c (real addresses)
 ├── app/                 main.c test harness (no RTE, no SWC)
 ├── samples/             demo drive log (GVRET CSV + candump)
-├── tools/               log/DBC helpers (cantools), frozen dbc2c.py
+├── tools/               check_dbc.py, demo log generator (cantools)
 ├── test/host/           host unit tests, fake MCAL registers
 └── docs/                roadmap, SavvyCAN guides, exercises
 ```
 
 Milestones:
 1. Repo skeleton: CMake (host tests + arm-none-eabi firmware), startup/linker script, Det, CI. Done.
-2. CanIf → PduR → Com with `dbc2c.py`. Done, now frozen.
+2. CanIf → PduR → Com with a DBC-to-C generator. Done, then removed when the scope was narrowed (in git history).
 3. MCAL base: register layer, Port + Dio (exercise M1), Mcu + Gpt (exercise M2); `main.c` blinks the LED through `Port_Init` / `Dio_FlipChannel` on a Gpt tick.
 4. Can driver for bxCAN (exercise M3, loopback first) + Uart SLCAN stream (exercise M4); SavvyCAN shows the Blue Pill's frames live over a LAWICEL connection.
 5. DBC track: a DBC for `GVRET_Log.csv` (exercise D1) and for `0x2F0` in the demo log (SavvyCAN guide, exercise 4), each checked with cantools; the Blue Pill transmits frames described by your DBC and SavvyCAN decodes them.
@@ -135,7 +134,7 @@ Guided exercises (the learner writes the code and the DBC, Claude reviews):
 ### Scope history
 - 2026-10-09: Option A chosen (CAN gateway ECU on STM32, verified with log replay), narrowed to BSW only (Can, CanIf, PduR, Com, Det), no RTE/ASW. Milestones 1 and 2 were built under this scope.
 - 2026-10-11: MCAL added below the stack ("MCAL + CAN stack").
-- 2026-10-11: narrowed to MCAL + DBC with SavvyCAN, as described above. CanIf/PduR/Com frozen.
+- 2026-10-11: narrowed to MCAL + DBC with SavvyCAN, as described above. CanIf/PduR/Com, `gen/` and `dbc2c.py` removed from the repo at hi3rdt's request.
 - Option B (a standalone log analyzer tool) was never the main project; its useful parts live on as the DBC track.
 
 ---

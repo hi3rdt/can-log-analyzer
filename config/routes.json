@@ -1,6 +1,0 @@
-{
-  "node": "GW",
-  "pdu_gateway": [
-    { "rx": "BodyStatus", "tx": "GW_BodyStatusFwd" }
-  ]
-}

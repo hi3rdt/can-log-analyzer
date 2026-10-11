@@ -95,5 +95,5 @@ Thử tay ngay: với frame tiếp theo `40 C0 40 ??`, CRC đúng phải là `0x
 ## 4. Liên hệ với project
 
 - `samples/demo_drive` có `SpeedCounter` + `SpeedChecksum` trong `0x100`. Đó là phiên bản đơn giản (XOR nibble) của cặp counter + CRC ở trên, và Bài 4 nâng cao trong hướng dẫn SavvyCAN yêu cầu bạn tìm ra thuật toán của nó.
-- Phần mở rộng tùy chọn trong roadmap là thêm **E2E (CRC-8 J1850 + alive counter)** vào `Com` của project. Hàm ở trên chính là viên gạch đầu tiên cho phần đó.
+- Trong nhánh DBC ([bài D1](exercises/dbc01-gvret-log.vi.md)) bạn dùng đúng hàm ở trên để chứng minh byte nào là CRC trước khi ghi nó vào DBC, kèm `CM_` ghi rõ thuật toán.
 - Trong driver bxCAN ([bài MCAL 3](exercises/ex03-can-bxcan.vi.md)), bạn **không** viết CRC-15: phần cứng làm. Bạn chỉ thấy hậu quả của nó qua `CAN_ESR.LEC` (mã lỗi cuối cùng, `110` = CRC error) và bộ đếm `TEC`/`REC`.

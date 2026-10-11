@@ -35,8 +35,8 @@ typedef struct
     uint8                    filterCount;         /* 0..14                  */
 } Can_ConfigType;
 
-/** Hardware object handles (unique across HTH and HRH). HTH 0 is the one
- *  gen/CanIf_Cfg.c already uses; it owns all three TX mailboxes. */
+/** Hardware object handles (unique across HTH and HRH). HTH 0 owns all
+ *  three TX mailboxes. */
 #define CAN_HTH_TX          ((Can_HwHandleType)0U)
 #define CAN_HRH_FIFO0       ((Can_HwHandleType)1U)
 

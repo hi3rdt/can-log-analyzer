@@ -15,14 +15,12 @@ jobs:
           python-version: "3.12"
       - name: Install Python tools
         run: pip install -r tools/requirements.txt
-      - name: Generator unit tests
+      - name: Tool unit tests
         run: python -m unittest discover -s tools -v
-      - name: Generated code is up to date
+      - name: Demo log is up to date
         run: |
-          python tools/dbc2c.py --dbc config/gateway.dbc --routes config/routes.json --out gen
-          python tools/gen_test_vectors.py --dbc config/gateway.dbc --routes config/routes.json --out test/host/test_vectors.h
           python tools/gen_demo_log.py --dbc config/gateway.dbc --out samples/demo_drive
-          git diff --exit-code -- gen test/host/test_vectors.h samples
+          git diff --exit-code -- samples
       - name: Configure
         run: cmake -S . -B build-host
       - name: Build

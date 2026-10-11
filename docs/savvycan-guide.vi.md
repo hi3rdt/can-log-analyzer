@@ -81,7 +81,7 @@ Trong `demo_drive` có ID `0x2F0` mà DBC không định nghĩa (SavvyCAN hiển
 2. **Sniffer**: tua log (dùng **RE Tools → Flow View**, nút play, chỉnh *Playback Speed*) và nhìn byte nào sáng **đúng lúc** các sự kiện ở bảng Bài 3 xảy ra. Gợi ý: trùng thời điểm với nổ máy? với lúc vào cua? Cái gì trên xe nhấp nháy khi vào cua?
 3. **Flow View**: chọn `0x2F0`, xem đồ thị từng bit theo thời gian. Bit dạng xung vuông đều là đèn/nháy; nibble tăng 0→F là counter.
 4. Với cặp byte nghi là một giá trị 16 bit, thử cả hai cách ghép (byte n:n+1 và n+1:n). Cách nào cho ra con số "có ý nghĩa vật lý" và thay đổi trơn tru thì đó là byte order đúng.
-5. Viết giả thuyết thành các dòng `SG_` dưới một `BO_ 752 Mystery: 8 BCM` trong một **bản sao** của DBC (đừng sửa `config/gateway.dbc` vì file đó sinh code cho project), nạp lại bằng DBC File Manager và vẽ đồ thị để chứng minh.
+5. Viết giả thuyết thành các dòng `SG_` dưới một `BO_ 752 Mystery: 8 BCM` trong một **bản sao** của DBC (đừng sửa `config/gateway.dbc` vì CI dùng file đó để sinh lại log demo và so sánh), nạp lại bằng DBC File Manager và vẽ đồ thị để chứng minh.
 
 Có 4 signal để tìm: 1 bit nháy theo nhịp, 1 bit bật một lần và giữ nguyên, 1 giá trị 16 bit, 1 counter 4 bit. Đáp án ở cuối file; chỉ mở sau khi đã viết xong DBC của bạn.
 

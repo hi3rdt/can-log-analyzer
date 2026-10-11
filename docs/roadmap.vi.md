@@ -47,9 +47,9 @@ Phần cứng: STM32F103C8T6 (Blue Pill, bxCAN) · Công cụ: SavvyCAN, file lo
 - Sản phẩm: STM32 ở chế độ loopback nhận lại chính frame nó gửi; SavvyCAN hiển thị trực tiếp các frame đó và decode bằng DBC của bạn.
 
 ### Giai đoạn 4 — Ánh xạ khái niệm AUTOSAR vào code của bạn (tuần 4–6, chạy song song)
-- Kiến trúc phân lớp: MCAL → ECU Abstraction → Services → RTE → SWC. Cần hiểu tất cả các lớp, nhưng **chỉ implement MCAL** (mục 2). Code CanIf/PduR/Com của mốc 2 vẫn nằm trong repo ở trạng thái đóng băng, làm ví dụ cho các lớp phía trên.
-- Đường đi của communication stack: `Can` → `CanIf` → `PduR` → `Com` → (RTE → SWC trong ECU thật). Trong project này, API public của Com (`Com_ReceiveSignal` / `Com_SendSignal`) là ranh giới trên cùng.
-- Các khái niệm mà code mốc 2 (đã đóng băng) minh họa (dạng đơn giản hóa): PDU, I-PDU và L-PDU, bảng cấu hình signal/PDU, các chế độ TX của Com (periodic / direct / mixed), deadline monitoring (timeout → giá trị thay thế), update bit, PDU gateway của PduR, signal gateway của Com.
+- Kiến trúc phân lớp: MCAL → ECU Abstraction → Services → RTE → SWC. Cần hiểu tất cả các lớp, nhưng **chỉ implement MCAL** (mục 2). Các lớp phía trên chỉ học lý thuyết: driver Can dừng ở các callback trong `CanIf_Cbk.h`, do một test harness nhỏ trong `app/` viết phần thân.
+- Đường đi của communication stack trong ECU thật: `Can` → `CanIf` → `PduR` → `Com` → RTE → SWC. Trong project này, ranh giới là các callback của driver Can (`CanIf_Cbk.h`).
+- Các khái niệm cần hiểu để trả lời phỏng vấn (không implement): PDU, I-PDU và L-PDU, bảng cấu hình signal/PDU, các chế độ TX của Com (periodic / direct / mixed), deadline monitoring (timeout → giá trị thay thế), update bit, PDU gateway của PduR, signal gateway của Com. Mốc 2 đã làm một phiên bản đơn giản của các phần này; code vẫn còn trong lịch sử git (đã xóa 2026-10-11).
 - Chỉ đọc lý thuyết (không cần implement cho CV): RTE và SWC/runnable, EcuM/BswM, NvM/MemIf, cơ bản Dcm/UDS, các profile bảo vệ E2E (CRC + alive counter).
 - Tài liệu tham khảo: các tài liệu SWS AUTOSAR Classic cho Can, CanIf, PduR, Com (miễn phí trên autosar.org) — chỉ cần đọc phần API và cấu hình.
 
@@ -68,7 +68,7 @@ Project chỉ có hai nhánh:
 
 **Ngoài phạm vi:** các BSW service mới (CanIf, PduR, Com, CanTp, Dcm, NvM, ...), RTE và ASW/SWC. Trong công nghiệp, các lớp này được cấu hình và sinh code bằng tool (Vector DaVinci, EB tresos, ETAS ISOLAR) mà project cá nhân không có. MCAL thì khác: hãng chip giao nó dưới dạng driver C thường, và không hãng nào làm MCAL cho F103, nên tự viết vừa đáng tin vừa là cách tốt nhất để thể hiện kỹ năng thanh ghi.
 
-**Code CanIf/PduR/Com đã có (mốc 2) được đóng băng.** Code vẫn nằm trong repo, vẫn build và vẫn được CI test, nhưng không phát triển thêm và không đưa vào câu giới thiệu CV. Nó có thể làm lớp phía trên khi test driver Can.
+**Code CanIf/PduR/Com của mốc 2 đã bị xóa (2026-10-11)**, cùng với cấu hình sinh ra và tool `dbc2c.py`; code vẫn còn trong lịch sử git. Phụ thuộc lên trên duy nhất của driver Can là `bsw/include/CanIf_Cbk.h` (`CanIf_RxIndication`, `CanIf_TxConfirmation`), do test harness trong `app/` viết phần thân.
 
 Ghi trong CV là "AUTOSAR-style MCAL, hand-written at register level", không bao giờ ghi "AUTOSAR-compliant": project chỉ làm một tập con API, không có cấu hình ARXML và không qua conformance test.
 
@@ -98,26 +98,25 @@ Cấu trúc repo (đích đến):
 ```
 can-log-analyzer/
 ├── bsw/
-│   ├── include/         Std_Types.h, Platform_Types.h, Can_GeneralTypes.h
+│   ├── include/         Std_Types.h, Can_GeneralTypes.h, CanIf_Cbk.h (callbacks, implemented in app/)
 │   ├── mcal/reg/        Mcal_Reg.h (register structs + base pointers)
 │   ├── mcal/port, dio/  Port.c, Dio.c                     (GPIO)
 │   ├── mcal/mcu, gpt/   Mcu.c, Gpt.c                      (clock tree, timer)
 │   ├── mcal/can/        Can.c, Can_Hw.c, Can.h            (bxCAN register-level)
 │   ├── mcal/uart/       Uart.c                            (USART1, SLCAN stream)
-│   ├── services/det/    Det.c
-│   └── ecual/, services/pdur, services/com   frozen (milestone 2)
+│   └── services/det/    Det.c
 ├── dbc/                 DBC files you write from the logs (DBC track)
 ├── platform/stm32f103/  startup, linker script, Mcal_RegMap.c (real addresses)
 ├── app/                 main.c test harness (no RTE, no SWC)
 ├── samples/             demo drive log (GVRET CSV + candump)
-├── tools/               log/DBC helpers (cantools), frozen dbc2c.py
+├── tools/               check_dbc.py, demo log generator (cantools)
 ├── test/host/           host unit tests, fake MCAL registers
 └── docs/                roadmap, SavvyCAN guides, exercises
 ```
 
 Các mốc:
 1. Khung repo: CMake (host test + firmware arm-none-eabi), startup/linker script, Det, CI. Đã xong.
-2. CanIf → PduR → Com với `dbc2c.py`. Đã xong, nay đóng băng.
+2. CanIf → PduR → Com với tool sinh code từ DBC. Đã xong, rồi bị xóa khi thu hẹp phạm vi (còn trong lịch sử git).
 3. Nền MCAL: lớp thanh ghi, Port + Dio (bài M1), Mcu + Gpt (bài M2); `main.c` nháy LED bằng `Port_Init` / `Dio_FlipChannel` theo tick của Gpt.
 4. Driver Can cho bxCAN (bài M3, loopback trước) + Uart đẩy frame dạng SLCAN (bài M4); SavvyCAN thấy frame của Blue Pill trực tiếp qua kết nối LAWICEL.
 5. Nhánh DBC: DBC cho `GVRET_Log.csv` (bài D1) và cho `0x2F0` trong log demo (bài 4 của hướng dẫn SavvyCAN), mỗi file kiểm bằng cantools; Blue Pill gửi các frame mô tả trong DBC của bạn và SavvyCAN decode chúng.
@@ -137,7 +136,7 @@ Các bài tập có hướng dẫn (bạn tự viết code và DBC, Claude revie
 ### Lịch sử phạm vi
 - 2026-10-09: chọn Option A (ECU gateway CAN trên STM32, kiểm chứng bằng phát lại log), thu hẹp còn BSW (Can, CanIf, PduR, Com, Det), không RTE/ASW. Mốc 1 và 2 được làm theo phạm vi này.
 - 2026-10-11: thêm MCAL bên dưới stack ("MCAL + CAN stack").
-- 2026-10-11: thu hẹp còn MCAL + DBC với SavvyCAN như mô tả ở trên. CanIf/PduR/Com đóng băng.
+- 2026-10-11: thu hẹp còn MCAL + DBC với SavvyCAN như mô tả ở trên. CanIf/PduR/Com, `gen/` và `dbc2c.py` bị xóa khỏi repo theo yêu cầu của hi3rdt.
 - Option B (một tool phân tích log độc lập) chưa bao giờ là project chính; phần hữu ích của nó nay là nhánh DBC.
 
 ---
