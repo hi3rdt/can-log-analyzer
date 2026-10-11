@@ -74,7 +74,7 @@ byte0 byte1 byte2 byte3
 | `0x0E` | 725 | 3 | ~10 ms, có mất frame | counter nhảy cóc 123 lần |
 | `0x754` | 529 | 18 | ~16 ms | |
 | `0x1F8` | 421 | 9 | ~20 ms | |
-| `0x168` | 359 | 17 | ~25 ms | |
+| `0x168` | 359 | 17 | ~20 ms, có mất frame | trung bình ra ~25 ms, nhưng khoảng cách hay gặp nhất là 20 ms (271 lần); 40 và 60 ms là mất 1–2 frame |
 | `0x3xx` | 4–11 | | ~1 s | trạng thái chậm |
 | `0x500`, `0x558` | 1 | | chỉ xuất hiện một lần | sự kiện, không định kỳ |
 
@@ -122,7 +122,7 @@ Hai frame đặc biệt:
 
 Các con số dưới đây tính trên frame đã bỏ dòng trùng và bỏ frame chứa byte hỏng `F1`.
 
-### `0x168` — DLC 8, chu kỳ 25 ms, 332 frame
+### `0x168` — DLC 8, chu kỳ 20 ms (có mất frame), 332 frame
 
 ```
 byte:  0  1  2  3  4  5  6  7

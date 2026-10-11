@@ -1,6 +1,6 @@
-# Lộ trình học & Project CV — MCAL kiểu AUTOSAR + CAN stack trên STM32F103
+# Lộ trình học & Project CV — MCAL kiểu AUTOSAR + DBC với SavvyCAN trên STM32F103
 
-Người học: hi3rdt · Ngày: 2026-10-09 · Cập nhật: 2026-10-11 (MCAL + CAN stack)
+Người học: hi3rdt · Ngày: 2026-10-09 · Cập nhật: 2026-10-11 (phạm vi: MCAL + DBC với SavvyCAN)
 Phần cứng: STM32F103C8T6 (Blue Pill, bxCAN) · Công cụ: SavvyCAN, file log CAN (offline)
 
 > Bản tiếng Việt của [roadmap.md](roadmap.md). Code, tên module và thuật ngữ kỹ thuật giữ nguyên tiếng Anh.
@@ -31,7 +31,8 @@ Phần cứng: STM32F103C8T6 (Blue Pill, bxCAN) · Công cụ: SavvyCAN, file lo
 - Sản phẩm: ghi chú ngắn + ảnh chụp màn hình 3 signal đã decode (sẽ đưa vào README của project sau).
 - Nguồn log/DBC: `commaai/opendbc` (file DBC của xe thật), dữ liệu test của `linklayer/cantools`, log mẫu của SavvyCAN. Chọn một hãng xe có cả DBC lẫn log.
 
-### Giai đoạn 2 — DBC & tính toán signal bằng C (tuần 2–3)
+### Giai đoạn 2 — Tự viết DBC & phép tính signal đằng sau nó (tuần 2–3, nhánh DBC)
+- Tự viết DBC cho một log thật trong SavvyCAN (bài D1): cú pháp `BO_` / `SG_`, start bit và độ dài, `@1` hay `@0`, `+`/`-`, factor/offset, bảng `VAL_`, chú thích `CM_`, thuộc tính chu kỳ gửi. Kiểm DBC với log bằng cantools.
 - Đánh số bit Intel (little-endian) và Motorola (big-endian) — nguồn lỗi decode số 1.
 - Giá trị vật lý = raw × factor + offset; signal có dấu; min/max; signal multiplexed.
 - Viết thư viện C chạy trên PC `CanSig_Unpack/Pack` + unit test (Unity hoặc CppUTest), đối chiếu kết quả với `cantools` (Python) trên cùng một file log.
@@ -42,114 +43,106 @@ Phần cứng: STM32F103C8T6 (Blue Pill, bxCAN) · Công cụ: SavvyCAN, file lo
 - Chuyển chế độ init/sleep/normal (INRQ/INAK, SLEEP/SLAK), chế độ loopback để tự kiểm tra.
 - 3 TX mailbox, 2 RX FIFO (mỗi FIFO sâu 3 frame), 14 filter bank: chế độ ID-list và mask.
 - Nhận frame bằng ngắt (IRQ USB_LP_CAN1_RX0), ngắt TX-complete, xử lý lỗi/bus-off (ABOM).
-- Ghi log mọi frame qua UART theo định dạng **giống GVRET / text SLCAN** để SavvyCAN hoặc script Python thu được.
-- Sản phẩm: STM32 ở chế độ loopback nhận lại chính frame nó gửi; SavvyCAN hiển thị được các frame đó.
+- Driver Uart đẩy mọi frame theo **giao thức text LAWICEL/SLCAN**, SavvyCAN đọc trực tiếp qua kết nối LAWICEL serial.
+- Sản phẩm: STM32 ở chế độ loopback nhận lại chính frame nó gửi; SavvyCAN hiển thị trực tiếp các frame đó và decode bằng DBC của bạn.
 
 ### Giai đoạn 4 — Ánh xạ khái niệm AUTOSAR vào code của bạn (tuần 4–6, chạy song song)
-- Kiến trúc phân lớp: MCAL → ECU Abstraction → Services → RTE → SWC. Cần hiểu tất cả các lớp, nhưng **chỉ implement phần BSW** (MCAL, ECU Abstraction, Services).
+- Kiến trúc phân lớp: MCAL → ECU Abstraction → Services → RTE → SWC. Cần hiểu tất cả các lớp, nhưng **chỉ implement MCAL** (mục 2). Code CanIf/PduR/Com của mốc 2 vẫn nằm trong repo ở trạng thái đóng băng, làm ví dụ cho các lớp phía trên.
 - Đường đi của communication stack: `Can` → `CanIf` → `PduR` → `Com` → (RTE → SWC trong ECU thật). Trong project này, API public của Com (`Com_ReceiveSignal` / `Com_SendSignal`) là ranh giới trên cùng.
-- Các khái niệm sẽ thực sự implement (dạng đơn giản hóa): PDU, I-PDU và L-PDU, bảng cấu hình signal/PDU, các chế độ TX của Com (periodic / direct / mixed), deadline monitoring (timeout → giá trị thay thế), update bit, PDU gateway của PduR, signal gateway của Com.
+- Các khái niệm mà code mốc 2 (đã đóng băng) minh họa (dạng đơn giản hóa): PDU, I-PDU và L-PDU, bảng cấu hình signal/PDU, các chế độ TX của Com (periodic / direct / mixed), deadline monitoring (timeout → giá trị thay thế), update bit, PDU gateway của PduR, signal gateway của Com.
 - Chỉ đọc lý thuyết (không cần implement cho CV): RTE và SWC/runnable, EcuM/BswM, NvM/MemIf, cơ bản Dcm/UDS, các profile bảo vệ E2E (CRC + alive counter).
 - Tài liệu tham khảo: các tài liệu SWS AUTOSAR Classic cho Can, CanIf, PduR, Com (miễn phí trên autosar.org) — chỉ cần đọc phần API và cấu hình.
 
 ### Giai đoạn 5 — Xây dựng project CV (tuần 6–10)
-Xem mục 2. Tuần cuối: README, sơ đồ kiến trúc, video/GIF demo từ SavvyCAN, báo cáo MISRA.
+Xem mục 2. Tuần cuối: README, sơ đồ kiến trúc, video/GIF SavvyCAN decode frame của Blue Pill bằng DBC của bạn, báo cáo MISRA.
 
 ---
 
 ## 2. Project CV
 
-### Cập nhật phạm vi (2026-10-11): MCAL + CAN stack
-Project giờ làm cả lớp bên dưới CanIf: một **MCAL kiểu AUTOSAR viết tay** trên thanh ghi STM32F103, theo thứ tự: Port + Dio (GPIO), Mcu (cây clock) + Gpt (timer phần cứng cho tick của OS), Can (bxCAN), và Adc nếu còn thời gian. Mọi driver dùng tên API theo SWS (`Port_Init`, `Dio_WriteChannel`, `Mcu_InitClock`, `Gpt_StartTimer`, `Can_Write`, ...), nhận một struct cấu hình `const`, báo lỗi phát triển qua Det với module ID chính thức, và chỉ chạm thanh ghi qua con trỏ base (`bsw/mcal/reg/Mcal_Reg.h`). Firmware gán các con trỏ đó vào địa chỉ thật (`platform/stm32f103/Mcal_RegMap.c`), còn host test gán vào RAM (`test/host/stubs/Mcal_FakeRegs.c`), nên driver nào cũng unit test được trên PC.
+### Phạm vi hiện tại (2026-10-11): MCAL + DBC với SavvyCAN
+Project chỉ có hai nhánh:
 
-Trong công nghiệp, MCAL do hãng chip cung cấp (NXP RTD, Infineon MCAL, ST MCAL cho SPC5/Stellar) và được cấu hình bằng tool của hãng; không hãng nào làm MCAL cho F103, nên tự viết là trung thực và thể hiện được cả kỹ năng thanh ghi lẫn hiểu biết về phân lớp AUTOSAR. Ghi trong CV là "AUTOSAR-style MCAL, hand-written at register level", không bao giờ ghi "AUTOSAR-compliant": project chỉ làm một tập con API, không có cấu hình ARXML và không qua conformance test.
+1. **Nhánh MCAL.** Một **MCAL kiểu AUTOSAR viết tay** trên thanh ghi STM32F103: Port + Dio (GPIO), Mcu (cây clock) + Gpt (timer phần cứng), Can (bxCAN), một driver Uart đẩy frame lên SavvyCAN theo giao thức text LAWICEL/SLCAN, và Adc nếu còn thời gian. Mọi driver dùng tên API theo SWS (`Port_Init`, `Dio_WriteChannel`, `Mcu_InitClock`, `Gpt_StartTimer`, `Can_Write`, ...), nhận một struct cấu hình `const`, báo lỗi phát triển qua Det với module ID chính thức, và chỉ chạm thanh ghi qua con trỏ base (`bsw/mcal/reg/Mcal_Reg.h`). Firmware gán các con trỏ đó vào địa chỉ thật (`platform/stm32f103/Mcal_RegMap.c`), còn host test gán vào RAM (`test/host/stubs/Mcal_FakeRegs.c`), nên driver nào cũng unit test được trên PC.
+2. **Nhánh DBC.** Reverse-engineer log CAN thật trong SavvyCAN rồi ghi kết quả thành file DBC: chu kỳ message, alive counter, CRC-8 SAE J1850 và checksum kiểu tổng, giá trị vật lý 16 bit, byte order và dấu. DBC được kiểm với log bằng cantools, sau đó dùng trong SavvyCAN để decode các frame mà Blue Pill gửi qua driver Can và Uart.
 
-Các bài tập có hướng dẫn (bạn tự viết code, Claude review):
+**Ngoài phạm vi:** các BSW service mới (CanIf, PduR, Com, CanTp, Dcm, NvM, ...), RTE và ASW/SWC. Trong công nghiệp, các lớp này được cấu hình và sinh code bằng tool (Vector DaVinci, EB tresos, ETAS ISOLAR) mà project cá nhân không có. MCAL thì khác: hãng chip giao nó dưới dạng driver C thường, và không hãng nào làm MCAL cho F103, nên tự viết vừa đáng tin vừa là cách tốt nhất để thể hiện kỹ năng thanh ghi.
 
-| # | Module | Hướng dẫn | Host test (option CMake, OFF đến khi xong) |
-|---|---|---|---|
-| 1 | Port, Dio | [ex01-port-dio.vi.md](exercises/ex01-port-dio.vi.md) | `test_port_dio` (`MCAL_PORT_DIO_EXERCISE_TESTS`) |
-| 2 | Mcu, Gpt | sắp có | sắp có |
-| 3 | Can (bxCAN) | [ex03-can-bxcan.vi.md](exercises/ex03-can-bxcan.vi.md) | `test_can_hw` (`CAN_HW_EXERCISE_TESTS`) |
-| 4 | Adc (tùy chọn) | sắp có | sắp có |
+**Code CanIf/PduR/Com đã có (mốc 2) được đóng băng.** Code vẫn nằm trong repo, vẫn build và vẫn được CI test, nhưng không phát triển thêm và không đưa vào câu giới thiệu CV. Nó có thể làm lớp phía trên khi test driver Can.
 
-### Quyết định phạm vi (2026-10-09): chỉ làm BSW, bỏ RTE/ASW
-Project chỉ implement **communication stack phần BSW**. RTE và các SWC ứng dụng được bỏ có chủ đích: trong công nghiệp, chúng được sinh ra bởi bộ tool (Vector DaVinci, EB tresos, ETAS ISOLAR) mà project cá nhân không có, nên một "RTE" tự viết tay dễ bị hỏi "không có tool thì làm thế nào?". Một tập con API theo SWS của Can/CanIf/PduR/Com, viết tay và được cấu hình bằng một script nhỏ sinh code từ DBC, thì trung thực, giải thích được từng dòng, và đúng là thứ mà các vị trí BSW integration/development làm hằng ngày.
-
-### Option A (đã chọn): "Communication stack CAN phần BSW kiểu AUTOSAR trên STM32 (gateway ECU), cấu hình từ DBC, kiểm chứng bằng phát lại log"
+Ghi trong CV là "AUTOSAR-style MCAL, hand-written at register level", không bao giờ ghi "AUTOSAR-compliant": project chỉ làm một tập con API, không có cấu hình ARXML và không qua conformance test.
 
 Câu giới thiệu để ghi vào CV (giữ tiếng Anh khi đưa vào CV):
-> Hand-wrote an AUTOSAR-style MCAL for STM32F103 at register level (Mcu, Port, Dio, Gpt, Can/bxCAN) with SWS API names, const configuration and Det error reporting, unit-tested on host against fake registers; on top of it, an AUTOSAR Classic–inspired CAN communication stack (CanIf, PduR with PDU gateway, Com with signal gateway, deadline monitoring and periodic TX) configured from DBC by a Python generator; verified by replaying real-vehicle CAN logs and decoding the output in SavvyCAN; MISRA C:2012 oriented, CI on GitHub Actions.
+> Hand-wrote an AUTOSAR-style MCAL for STM32F103 at register level (Mcu, Port, Dio, Gpt, Can/bxCAN, Uart) with SWS API names, const configuration and Det error reporting, unit-tested on host against fake registers with CI on GitHub Actions; reverse-engineered real-vehicle CAN logs in SavvyCAN into a DBC (alive counters, CRC-8 SAE J1850 and sum checksums, verified with cantools) and used it to decode the driver's live traffic streamed to SavvyCAN; MISRA C:2012 oriented.
 
 Kiến trúc:
 
 ```
  PC side                                   STM32F103 (Blue Pill)
- ┌───────────────────────┐   UART 1M   ┌─────────────────────────────────────────┐
- │ replay.py             │────────────▶│ CddUartGw  (log frames in / out)        │
- │  reads .csv/.asc/.log │◀────────────│        │                                │
- │  real timestamps      │             │        ▼                                │
- └───────────────────────┘             │ Can    (MCAL, bxCAN, loopback/normal)   │
-                                       │ Mcu/Port/Dio/Gpt (MCAL, registers)      │
- ┌───────────────────────┐             │ CanIf  (HRH/HTH mapping, RX indication) │
- │ SavvyCAN              │◀── capture ─│ PduR   (routing table, PDU gateway)     │
- │  DBC decode / graphs  │   (UART or  │ Com    (signal pack/unpack, signal      │
- │  verify ECU outputs   │   CANable)  │         gateway, deadline monitoring,   │
- └───────────────────────┘             │         periodic TX)                    │
- ┌───────────────────────┐             │ ComTest (thin hook calling the public   │
- │ dbc2c.py (codegen)    │── *.c/h ──▶ │          Com_ReceiveSignal/SendSignal)  │
- └───────────────────────┘             │ Os     (1 ms SysTick cooperative tasks) │
-                                       │ Det    (dev error tracer → UART)        │
-                                       └─────────────────────────────────────────┘
+ ┌───────────────────────┐  UART (SLCAN) ┌─────────────────────────────────────────┐
+ │ SavvyCAN              │◀──────────────│ app/main.c  (test harness, no RTE/SWC)  │
+ │  LAWICEL connection   │               │        │                                │
+ │  your DBC decodes the │               │        ▼                                │
+ │  frames live          │               │ MCAL                                    │
+ └───────────────────────┘               │  Can   (bxCAN, loopback/normal)         │
+ ┌───────────────────────┐               │  Uart  (SLCAN frame stream)             │
+ │ dbc/*.dbc (yours)     │               │  Port / Dio  (pins, LED)                │
+ │  checked by cantools  │               │  Mcu / Gpt   (72 MHz clock, 1 ms tick)  │
+ │  against real logs    │               │  Adc   (optional)                       │
+ └───────────────────────┘               │ Det    (development error tracer)       │
+                                         └─────────────────────────────────────────┘
 ```
 
-Luồng dữ liệu: một file log của xe thật được phát lại với đúng timing gốc → frame đi vào STM32 → `Can` → `CanIf` → `PduR`. PduR hoặc chuyển nguyên PDU sang một PDU TX (PDU gateway, ví dụ đổi ID), hoặc đưa lên `Com`. `Com` unpack signal, thực hiện **signal gateway** (chép các signal đầu vào được chọn sang các PDU output định nghĩa trong **file DBC output do chính bạn viết**) và gửi các PDU output theo chu kỳ → SavvyCAN thu lại và decode bằng DBC output đó. Khi dừng replay → deadline monitoring của Com kích hoạt → giá trị thay thế + báo cáo Det xuất hiện trong log. Phần demo timeout này là điểm rất mạnh để nói khi phỏng vấn. Không cần logic ứng dụng: gateway ECU là một sản phẩm hợp lệ chỉ gồm BSW.
-
-Vì sao chọn phạm vi này:
-- Phù hợp ràng buộc (dùng file log, không có xe) mà vẫn là công việc embedded thật trên phần cứng của bạn.
-- Mọi dòng code đều do bạn viết và giải thích được; không có "RTE giả" đóng vai output của tool.
-- Script sinh code từ DBC mô phỏng việc các tool cấu hình làm (`Com_Cfg.c`, `PduR_Cfg.c`), nên bạn có thể giải thích code sinh ra khi phỏng vấn.
-- Mở rộng được: các phần thêm tùy chọn gồm E2E (CRC8 SAE-J1850 + alive counter) trong Com, UDS ReadDataByIdentifier (0x22) qua CanTp/Dcm tối giản, thêm một Blue Pill thứ hai làm node thật trên bus.
-
-Repository: `github.com/hi3rdt/can-log-analyzer`. Cấu trúc:
+Cấu trúc repo (đích đến):
 
 ```
 can-log-analyzer/
 ├── bsw/
-│   ├── include/         Std_Types.h, ComStack_Types.h, Platform_Types.h
+│   ├── include/         Std_Types.h, Platform_Types.h, Can_GeneralTypes.h
 │   ├── mcal/reg/        Mcal_Reg.h (register structs + base pointers)
 │   ├── mcal/port, dio/  Port.c, Dio.c                     (GPIO)
 │   ├── mcal/mcu, gpt/   Mcu.c, Gpt.c                      (clock tree, timer)
 │   ├── mcal/can/        Can.c, Can_Hw.c, Can.h            (bxCAN register-level)
-│   ├── ecual/canif/     CanIf.c, CanIf_Cfg.c
-│   ├── services/pdur/   PduR.c, PduR_Cfg.c
-│   ├── services/com/    Com.c, Com_Cfg.c (generated)
+│   ├── mcal/uart/       Uart.c                            (USART1, SLCAN stream)
 │   ├── services/det/    Det.c
-│   └── os/              Os.c (SysTick scheduler)
-├── cdd/uartgw/          CddUartGw.c (frame bridge to PC)
+│   └── ecual/, services/pdur, services/com   frozen (milestone 2)
+├── dbc/                 DBC files you write from the logs (DBC track)
 ├── platform/stm32f103/  startup, linker script, Mcal_RegMap.c (real addresses)
-├── app/                 main.c + ComTest hook (no RTE, no SWC)
-├── config/              input.dbc, output.dbc, gateway.yaml
-├── tools/               dbc2c.py, replay.py, verify.py (cantools)
-├── test/host/           host unit tests for Com, PduR, CanIf, timeouts
-├── docs/                roadmap, architecture.md, SavvyCAN screenshots
-└── CMakeLists.txt       arm-none-eabi firmware + host test targets
+├── app/                 main.c test harness (no RTE, no SWC)
+├── samples/             demo drive log (GVRET CSV + candump)
+├── tools/               log/DBC helpers (cantools), frozen dbc2c.py
+├── test/host/           host unit tests, fake MCAL registers
+└── docs/                roadmap, SavvyCAN guides, exercises
 ```
 
-Các mốc (mỗi mốc một PR):
-1. Khung repo: CMake (host test + firmware arm-none-eabi), startup/linker script cho STM32F103, `Std_Types.h`/`ComStack_Types.h`, Det, CI.
-2. Đường Com trên PC: `CanIf` → `PduR` → `Com`, `dbc2c.py` sinh `Com_Cfg.c` / `PduR_Cfg.c` / `CanIf_Cfg.c`, kèm host unit test.
-3. Nền MCAL: lớp thanh ghi, Port + Dio (bài 1), Mcu + Gpt (bài 2); `main.c` nháy LED bằng `Port_Init` / `Dio_FlipChannel` theo tick của Gpt.
-4. Driver MCAL `Can` cho bxCAN (bài 3, loopback trước) + `CddUartGw`; thấy được frame trên PC.
-5. Os scheduler, Com periodic TX + deadline monitoring, signal gateway; phát lại log thật, decode output trong SavvyCAN.
-6. Phục hồi bus-off, Adc (tùy chọn), kiểm tra MISRA (cppcheck `--addon=misra`), README kèm sơ đồ, kết quả, GIF demo.
+Các mốc:
+1. Khung repo: CMake (host test + firmware arm-none-eabi), startup/linker script, Det, CI. Đã xong.
+2. CanIf → PduR → Com với `dbc2c.py`. Đã xong, nay đóng băng.
+3. Nền MCAL: lớp thanh ghi, Port + Dio (bài M1), Mcu + Gpt (bài M2); `main.c` nháy LED bằng `Port_Init` / `Dio_FlipChannel` theo tick của Gpt.
+4. Driver Can cho bxCAN (bài M3, loopback trước) + Uart đẩy frame dạng SLCAN (bài M4); SavvyCAN thấy frame của Blue Pill trực tiếp qua kết nối LAWICEL.
+5. Nhánh DBC: DBC cho `GVRET_Log.csv` (bài D1) và cho `0x2F0` trong log demo (bài 4 của hướng dẫn SavvyCAN), mỗi file kiểm bằng cantools; Blue Pill gửi các frame mô tả trong DBC của bạn và SavvyCAN decode chúng.
+6. Xử lý bus-off, Adc (tùy chọn), kiểm tra MISRA (cppcheck `--addon=misra`), README kèm sơ đồ, GIF demo.
 
-### Option B (không chọn làm project chính): "Công cụ phân tích log CAN & reverse-engineer signal"
-Công cụ C++/Python đọc log SavvyCAN/candump + DBC, decode signal, phát hiện bất thường (thiếu frame định kỳ, counter nhảy cóc, checksum sai, bus load) và xuất báo cáo. Chỉ giữ lại làm công cụ phụ bên trong Option A (`tools/verify.py`).
+Các bài tập có hướng dẫn (bạn tự viết code và DBC, Claude review):
+
+| # | Nhánh | Nội dung | Hướng dẫn | Kiểm tra |
+|---|---|---|---|---|
+| M1 | MCAL | Port, Dio | [ex01-port-dio.vi.md](exercises/ex01-port-dio.vi.md) | `test_port_dio` (`MCAL_PORT_DIO_EXERCISE_TESTS`) |
+| M2 | MCAL | Mcu, Gpt | sắp có | sắp có |
+| M3 | MCAL | Can (bxCAN) | [ex03-can-bxcan.vi.md](exercises/ex03-can-bxcan.vi.md) | `test_can_hw` (`CAN_HW_EXERCISE_TESTS`) |
+| M4 | MCAL | Uart + SLCAN lên SavvyCAN | sắp có | sắp có |
+| M5 | MCAL | Adc (tùy chọn) | sắp có | sắp có |
+| D1 | DBC | DBC cho `GVRET_Log.csv` | [dbc01-gvret-log.vi.md](exercises/dbc01-gvret-log.vi.md) | cantools + SavvyCAN |
+
+### Lịch sử phạm vi
+- 2026-10-09: chọn Option A (ECU gateway CAN trên STM32, kiểm chứng bằng phát lại log), thu hẹp còn BSW (Can, CanIf, PduR, Com, Det), không RTE/ASW. Mốc 1 và 2 được làm theo phạm vi này.
+- 2026-10-11: thêm MCAL bên dưới stack ("MCAL + CAN stack").
+- 2026-10-11: thu hẹp còn MCAL + DBC với SavvyCAN như mô tả ở trên. CanIf/PduR/Com đóng băng.
+- Option B (một tool phân tích log độc lập) chưa bao giờ là project chính; phần hữu ích của nó nay là nhánh DBC.
 
 ---
 
-## 3. Code tham khảo — Com unpack signal (byte order Intel)
+## 3. Code tham khảo — unpack signal (byte order Intel), phép tính đằng sau một dòng `SG_` trong DBC
 
 ```c
 /* Com_Signal.c - generic Intel (little-endian) signal extraction.
@@ -197,7 +190,7 @@ Các edge case cần test: `bitLength` = 1 và 32, signal nằm vắt qua ranh g
 
 ## 4. Danh sách mua sắm (tùy chọn, giá rẻ)
 - Module transceiver SN65HVD230 ×2 (~1 USD/cái) — cần cho bất kỳ bus thật nào.
-- Mạch USB-UART (CP2102/CH340) — cần cho Option A.
+- Mạch USB-UART (CP2102/CH340) — cần cho đường Uart SLCAN lên SavvyCAN.
 - Một Blue Pill thứ hai — làm "gateway" hoặc ECU thứ hai; giúp bạn thoát khỏi chế độ loopback.
 - USB-CAN loại CANable / tương thích candleLight (~15–25 USD) — giúp SavvyCAN nghe trực tiếp bus thật (kiểm tra thiết bị có được hỗ trợ trên hệ điều hành của bạn trong hộp thoại kết nối của SavvyCAN trước khi mua).
 - Điện trở termination 120 Ω ở cả hai đầu bus.

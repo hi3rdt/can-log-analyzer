@@ -15,7 +15,7 @@ Mục tiêu: sau 5 bài dưới đây bạn tự mở được một log CAN b�
 | `GVRET_Log.csv` | [SavvyCAN/examples](https://github.com/collin80/SavvyCAN/blob/master/examples/GVRET_Log.csv) (tải bằng nút *Download raw file*) | Log thật từ một xe không rõ hãng, 12 974 frame, 180 ID, dài 8,56 s, **không có DBC** | Bài 1: làm quen giao diện, đo chu kỳ, đoán counter |
 | `samples/demo_drive.csv` (và `.log` dạng candump) | Repo này, sinh bởi `tools/gen_demo_log.py` từ `config/gateway.dbc` | 30 s lái thử: nổ máy, tăng tốc lên 80 km/h, vào cua trái, phanh gấp có ABS, dừng, mở cửa. 5 130 frame | Bài 2–5: decode bằng DBC, vẽ đồ thị, reverse-engineer, export |
 
-Vì sao log thứ hai là log sinh ra: mình không tìm được một cặp log thật + DBC công khai mà khớp nhau và đủ nhỏ để học. Log `demo_drive` được sinh từ chính DBC của project nên mọi signal decode được đúng 100%, và chính log này sẽ được phát lại vào STM32 ở mốc 4. Bạn có thể sinh lại bất cứ lúc nào (kết quả giống hệt từng byte vì seed cố định):
+Vì sao log thứ hai là log sinh ra: mình không tìm được một cặp log thật + DBC công khai mà khớp nhau và đủ nhỏ để học. Log `demo_drive` được sinh từ chính DBC của project nên mọi signal decode được đúng 100%, và về sau Blue Pill sẽ gửi chính các frame này qua driver Can để SavvyCAN decode (mốc 5 trong roadmap). Bạn có thể sinh lại bất cứ lúc nào (kết quả giống hệt từng byte vì seed cố định):
 
 ```bash
 pip install -r tools/requirements.txt
