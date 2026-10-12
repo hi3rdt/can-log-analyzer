@@ -122,7 +122,7 @@ Các mốc:
 5. Nhánh DBC: DBC cho `GVRET_Log.csv` (bài D1) và cho `0x2F0` trong log demo (bài 4 của hướng dẫn SavvyCAN), mỗi file kiểm bằng cantools; Blue Pill gửi các frame mô tả trong DBC của bạn và SavvyCAN decode chúng.
 6. Xử lý bus-off, Adc (tùy chọn), kiểm tra MISRA (cppcheck `--addon=misra`), README kèm sơ đồ, GIF demo.
 
-Các bài tập có hướng dẫn (bạn tự viết code và DBC, Claude review):
+Các bài tập có hướng dẫn (bạn tự viết code và DBC, sau đó được review):
 
 | # | Nhánh | Nội dung | Hướng dẫn | Kiểm tra |
 |---|---|---|---|---|

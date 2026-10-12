@@ -120,7 +120,7 @@ Milestones:
 5. DBC track: a DBC for `GVRET_Log.csv` (exercise D1) and for `0x2F0` in the demo log (SavvyCAN guide, exercise 4), each checked with cantools; the Blue Pill transmits frames described by your DBC and SavvyCAN decodes them.
 6. Bus-off handling, optional Adc, MISRA check (cppcheck `--addon=misra`), README with diagrams, demo GIF.
 
-Guided exercises (the learner writes the code and the DBC, Claude reviews):
+Guided exercises (the learner writes the code and the DBC, then it is reviewed):
 
 | # | Track | Topic | Guide | Check |
 |---|---|---|---|---|
