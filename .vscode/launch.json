@@ -8,11 +8,14 @@
       "servertype": "openocd",
       "cwd": "${workspaceFolder}",
       "executable": "${workspaceFolder}/build-fw/firmware.elf",
-      "configFiles": ["tools/openocd/bluepill.cfg"],
+      "configFiles": [
+        "tools/openocd/bluepill.cfg"
+      ],
       "device": "STM32F103C8",
       "runToEntryPoint": "main",
       "preLaunchTask": "fw: build",
-      "showDevDebugOutput": "none"
+      "showDevDebugOutput": "none",
+      "svdFile": "${workspaceFolder}/tools/svd/STM32F103xx.svd"
     },
     {
       "name": "STM32: attach (no reset, no reflash)",
@@ -21,8 +24,11 @@
       "servertype": "openocd",
       "cwd": "${workspaceFolder}",
       "executable": "${workspaceFolder}/build-fw/firmware.elf",
-      "configFiles": ["tools/openocd/bluepill.cfg"],
-      "device": "STM32F103C8"
+      "configFiles": [
+        "tools/openocd/bluepill.cfg"
+      ],
+      "device": "STM32F103C8",
+      "svdFile": "${workspaceFolder}/tools/svd/STM32F103xx.svd"
     }
   ]
 }
