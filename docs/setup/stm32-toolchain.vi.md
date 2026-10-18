@@ -30,7 +30,13 @@ khi debug** (rất cần khi viết MCAL), và dùng chung editor với ESP-IDF.
 
 Ghi chú khi cài:
 
-- 1.1: ở trang cuối của installer tick **"Add path to environment variable"**.
+- 1.1: trang của Arm có thể chuyển sang GitLab. Ở đó vào mục **Releases**, chọn bản mới nhất, phần
+  *Assets* tải file có dạng `arm-gnu-toolchain-<version>-mingw-w64-x86_64-arm-none-eabi.exe`
+  (bản `.zip` cũng được; không chọn file có `aarch64`, `darwin`, `linux` hay chữ `src`). Với file
+  `.exe`, ở trang cuối của installer tick **"Add path to environment variable"**.
+- 1.1, cách thay thế dễ hơn: **xPack GNU Arm Embedded GCC** (cùng nhà với OpenOCD ở 1.5) trên
+  github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases, tải `...-win32-x64.zip`, giải nén
+  vào `C:\tools\` và thêm thư mục `bin` vào `PATH`. Trình biên dịch giống hệt, dùng được ngay với repo.
 - 1.5: giải nén vào ví dụ `C:\tools\xpack-openocd-0.12.0-x`, rồi thêm `...\bin` vào `PATH`
   (*Edit the system environment variables → Environment Variables → Path → New*).
 - Sau khi sửa `PATH`, **đóng hết terminal và VS Code** rồi mở lại.
