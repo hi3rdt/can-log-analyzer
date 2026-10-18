@@ -3,8 +3,17 @@
   "cmake.configureOnOpen": false,
   "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
   "C_Cpp.default.cStandard": "c99",
-  "files.associations": { "*.h": "c" },
+  "files.associations": {
+    "*.h": "c"
+  },
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
-  "editor.rulers": [100]
+  "editor.rulers": [
+    100
+  ],
+  "clangd.arguments": [
+    "--compile-commands-dir=${workspaceFolder}/build-fw",
+    "--query-driver=**/arm-none-eabi-gcc*"
+  ],
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build-fw/compile_commands.json"
 }

@@ -76,3 +76,6 @@ Thumbs.db
 esp32/**/sdkconfig
 esp32/**/sdkconfig.old
 esp32/**/managed_components/
+
+# Vendor SVD files are downloaded locally (docs/setup/stm32-toolchain.vi.md, section 6)
+tools/svd/*.svd

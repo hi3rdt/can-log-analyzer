@@ -108,6 +108,13 @@ Thấy `** Verified OK **` là xong; **LED PC13 nháy 1 Hz** (heartbeat trong `a
 
 Nhấn `F5` → chọn **STM32: debug (OpenOCD + ST-Link)**: build, nạp, dừng ở `main`.
 
+Để cửa sổ **XPERIPHERALS** hiện thanh ghi, cần file SVD của chip (không commit vào repo):
+
+1. Cài extension **Peripheral Viewer** (`mcu-debug.peripheral-viewer`).
+2. Lấy `STM32F103xx.svd` từ thư mục `SVD` của STM32CubeProgrammer, hoặc từ GitHub repo
+   `cmsis-svd/cmsis-svd-data` (`data/STMicro/STM32F103xx.svd`).
+3. Đặt file vào `tools/svd/STM32F103xx.svd`; `launch.json` đã trỏ sẵn tới đường dẫn này.
+
 Những thứ nên tập ngay vì sẽ dùng suốt khi viết MCAL:
 
 - Cửa sổ **XPERIPHERALS** → `GPIOC` → `CRH`, `ODR`: đặt breakpoint trong `Led_Toggle()` và xem bit 13
