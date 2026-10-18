@@ -47,7 +47,9 @@ app/                   main.c (init sequence, main loop)
 cmake/                 arm-none-eabi toolchain file
 test/host/             Host unit tests (plain C, run with CTest); stubs/ has fake MCAL registers
 samples/               30 s demo drive log (GVRET CSV + candump) generated from config/gateway.dbc
-docs/                  Roadmap, SavvyCAN hands-on guide, guided exercises (docs/exercises/)
+esp32/restbus_sim/     ESP-IDF rest-bus simulator: replays samples/ on CAN with fault injection (Project 1)
+tools/openocd/         OpenOCD config for ST-Link + Blue Pill (clone chips included)
+docs/                  Roadmap, SavvyCAN guide, exercises (docs/exercises/), setup (docs/setup/), project designs (docs/projects/)
 ```
 
 Planned modules (`Mcu`, `Gpt`, bxCAN `Can.c`, `Uart`, optional `Adc`) are listed in [docs/roadmap.md](docs/roadmap.md#2-cv-project).
@@ -59,9 +61,7 @@ Host unit tests (gcc, AddressSanitizer + UBSan) and tool tests:
 ```sh
 pip install -r tools/requirements.txt
 python3 -m unittest discover -s tools
-cmake -S . -B build-host
-cmake --build build-host
-ctest --test-dir build-host --output-on-failure
+cmake --preset host && cmake --build --preset host && ctest --preset host
 ```
 
 The guided exercises in `docs/exercises/` ship header contracts, stub sources and host tests that are switched off until the implementation lands (`-DMCAL_PORT_DIO_EXERCISE_TESTS=ON`, `-DCAN_HW_EXERCISE_TESTS=ON`).
@@ -69,13 +69,16 @@ The guided exercises in `docs/exercises/` ship header contracts, stub sources an
 Firmware (GNU Arm toolchain, `arm-none-eabi-gcc`):
 
 ```sh
-cmake -S . -B build-fw -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake -DCMAKE_BUILD_TYPE=Release
-cmake --build build-fw
-# flash with ST-Link
-st-flash write build-fw/firmware.bin 0x08000000
+cmake --preset fw && cmake --build --preset fw
+# flash with ST-Link + OpenOCD (handles clone Blue Pill chips)
+openocd -f tools/openocd/bluepill.cfg -c "program build-fw/firmware.elf verify reset exit"
 ```
 
-The current firmware brings up the 72 MHz clock tree and blinks the PC13 LED at 1 Hz.
+The current firmware brings up the 72 MHz clock tree and blinks the PC13 LED at 1 Hz. Toolchain, VS Code (CMake Tools + Cortex-Debug) and ST-Link setup: [docs/setup/stm32-toolchain.vi.md](docs/setup/stm32-toolchain.vi.md). `CMakePresets.json` has `fw` (firmware) and `host` (unit tests) presets.
+
+## Project 1: instrument cluster on a real CAN bus
+
+The MCAL is put to work in a CAN instrument cluster ECU: the Blue Pill decodes speed, RPM and warning signals with deadline monitoring and alive-counter/checksum checks and drives a 2.4" TFT, while an ESP32 rest-bus simulator ([esp32/restbus_sim](esp32/restbus_sim/README.md)) replays the demo drive log on the bus and injects faults. Design: [docs/projects/p1-instrument-cluster.vi.md](docs/projects/p1-instrument-cluster.vi.md); bench setup: [docs/projects/p1-step1-bringup.vi.md](docs/projects/p1-step1-bringup.vi.md).
 
 ## Coding rules
 

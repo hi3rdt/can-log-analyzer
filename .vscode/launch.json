@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "STM32: debug (OpenOCD + ST-Link)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "servertype": "openocd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build-fw/firmware.elf",
+      "configFiles": ["tools/openocd/bluepill.cfg"],
+      "device": "STM32F103C8",
+      "runToEntryPoint": "main",
+      "preLaunchTask": "fw: build",
+      "showDevDebugOutput": "none"
+    },
+    {
+      "name": "STM32: attach (no reset, no reflash)",
+      "type": "cortex-debug",
+      "request": "attach",
+      "servertype": "openocd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build-fw/firmware.elf",
+      "configFiles": ["tools/openocd/bluepill.cfg"],
+      "device": "STM32F103C8"
+    }
+  ]
+}

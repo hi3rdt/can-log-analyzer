@@ -87,6 +87,20 @@ else()
 
     add_host_test(test_det)
 
+    # ESP32 rest-bus simulator (Project 1): its log parser and fault injection
+    # are plain C and are tested here; the TWAI/FreeRTOS parts build with ESP-IDF.
+    set(RESTBUS_DIR ${CMAKE_SOURCE_DIR}/esp32/restbus_sim/main)
+    add_executable(test_restbus
+        ${CMAKE_SOURCE_DIR}/test/host/test_restbus.c
+        ${RESTBUS_DIR}/gvret_csv.c
+        ${RESTBUS_DIR}/fault_inject.c
+    )
+    target_include_directories(test_restbus PRIVATE ${CMAKE_SOURCE_DIR}/test/host ${RESTBUS_DIR})
+    target_compile_definitions(test_restbus PRIVATE SAMPLE_CSV="${CMAKE_SOURCE_DIR}/samples/demo_drive.csv")
+    target_compile_options(test_restbus PRIVATE ${WARN_FLAGS} -O0 -g -fsanitize=address,undefined)
+    target_link_options(test_restbus PRIVATE -fsanitize=address,undefined)
+    add_test(NAME test_restbus COMMAND test_restbus)
+
     # Exercise tests are OFF until the learner's implementation lands, so CI
     # stays green. Turn the default ON in the PR that adds the implementation.
     # MCAL exercise 1 (docs/exercises/ex01-port-dio.vi.md)

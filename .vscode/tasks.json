@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "fw: build",
+      "type": "shell",
+      "command": "cmake --preset fw && cmake --build --preset fw",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "fw: flash (OpenOCD + ST-Link)",
+      "type": "shell",
+      "command": "openocd -f tools/openocd/bluepill.cfg -c \"program build-fw/firmware.elf verify reset exit\"",
+      "dependsOn": "fw: build",
+      "problemMatcher": []
+    },
+    {
+      "label": "host: build + test",
+      "type": "shell",
+      "command": "cmake --preset host && cmake --build --preset host && ctest --preset host",
+      "group": "test",
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}

@@ -61,7 +61,7 @@ API đã khai báo sẵn trong `bsw/mcal/can/Can.h` (`Can_ConfigType`, `Can_Init
 `Can_Init` nên làm theo thứ tự:
 
 1. Bật clock: `RCC_APB1ENR.CANEN` và `RCC_APB2ENR.AFIOEN`. Clock `IOPBEN` đã do `Port_Init` bật.
-2. Remap CAN sang PB8/PB9: `AFIO_MAPR` (`0x4001 0004`) bit 14:13 = `0b10`. Bẫy: bit `SWJ_CFG` 26:24 là write-only và đọc về luôn 0, nên read-modify-write có thể ghi đè cấu hình SWD; hỏi bản thân xem có ảnh hưởng không.
+2. Remap CAN sang PB8/PB9: `AFIO_MAPR` (`0x4001 0004`) bit 14:13 = `0b10`. Bẫy: bit `SWJ_CFG` 26:24 là write-only và giá trị đọc về không xác định (RM0008 §9.4.2), nên read-modify-write có thể ghi đè cấu hình SWD; hỏi bản thân xem có ảnh hưởng không.
 3. GPIO **không** cấu hình trong `Can.c`: trong AUTOSAR, chân là việc của `Port`. Bảng `Port_ConfigType` của board phải có PB8 = `PORT_MODE_INPUT_PULLUP` và PB9 = `PORT_MODE_ALT_PP` 50 MHz (đúng như test của bài 1), và `Port_Init` chạy trước `Can_Init`.
 4. Thoát sleep, vào init: xóa `SLEEP`, set `INRQ`, chờ `INAK = 1` và `SLAK = 0`. **Mọi vòng chờ phải có timeout** (dùng `System_GetTickMs()`), hết hạn thì báo `Det_ReportError(DET_MODULE_ID_CAN, ...)` và trả lỗi.
 5. Cấu hình `MCR`: `ABOM = 1` (tự phục hồi bus-off), `TXFP` tùy bạn chọn và **ghi lý do vào comment** (gợi ý: ảnh hưởng thế nào đến thứ tự frame khi 3 mailbox đều đầy và `Can_Hw_FindFreeMailbox` luôn chọn mailbox thấp nhất?).

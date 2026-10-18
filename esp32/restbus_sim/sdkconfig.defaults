@@ -1,0 +1,8 @@
+# 1 kHz tick: vTaskDelay(1) = 1 ms, needed for 10 ms CAN periods
+CONFIG_FREERTOS_HZ=1000
+
+# TWAI ISR in IRAM: frames keep flowing while flash is busy (console, logging)
+CONFIG_TWAI_ISR_IN_IRAM=y
+
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=115200
