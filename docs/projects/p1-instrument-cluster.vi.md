@@ -105,8 +105,10 @@ Các quyết định cần thiết kế (đây là phần nên viết vào READM
 
 ## 5. Phía ESP32: rest-bus simulator
 
-- Đọc `GVRET_Log.csv` (hoặc `samples/demo_drive.csv`) từ LittleFS, phát lại đúng timestamp qua TWAI.
-- Web UI nhỏ (ESP-IDF `esp_http_server`): Play/Pause, tốc độ phát ×1/×2, và **fault injection**:
+- **Đã có sẵn:** `esp32/restbus_sim/` phát lại `samples/demo_drive.csv` (nhúng vào firmware) đúng timestamp qua TWAI;
+  fault injection điều khiển qua console serial. Bước đặt bàn test: [p1-step1-bringup.vi.md](p1-step1-bringup.vi.md).
+  Mở rộng sau: nạp `GVRET_Log.csv` từ LittleFS, web UI thay cho console.
+- Điều khiển (hiện là console, sau có thể là web UI): Play/Pause, tốc độ phát, và **fault injection**:
   - bỏ hẳn một ID (test timeout),
   - làm hỏng checksum của một ID (test INVALID),
   - đóng băng alive counter (test "ECU treo"),

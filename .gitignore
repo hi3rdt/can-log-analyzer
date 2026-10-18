@@ -33,10 +33,11 @@ CTestTestfile.cmake
 Testing/
 
 # IDE / editor
-.vscode/
+.vscode/*
 !.vscode/settings.json
 !.vscode/launch.json
 !.vscode/tasks.json
+!.vscode/extensions.json
 .idea/
 *.swp
 *~
@@ -70,3 +71,8 @@ Thumbs.db
 # Large raw captures (commit only small sample logs under samples/)
 *.pcap
 *.blf
+
+# ESP-IDF (sdkconfig.defaults is committed, the generated sdkconfig is not)
+esp32/**/sdkconfig
+esp32/**/sdkconfig.old
+esp32/**/managed_components/

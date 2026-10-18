@@ -1,0 +1,27 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "fw",
+      "displayName": "Firmware (STM32F103, arm-none-eabi-gcc)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-fw",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "host",
+      "displayName": "Host unit tests (gcc + ASan/UBSan, Linux or WSL)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-host"
+    }
+  ],
+  "buildPresets": [
+    { "name": "fw", "configurePreset": "fw" },
+    { "name": "host", "configurePreset": "host" }
+  ],
+  "testPresets": [
+    { "name": "host", "configurePreset": "host", "output": { "outputOnFailure": true } }
+  ]
+}
